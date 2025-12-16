@@ -1,0 +1,342 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 30px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+header h1 {
+    color: #333;
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+header p {
+    color: #666;
+    font-size: 1.1em;
+}
+
+nav {
+    margin-top: 20px;
+}
+
+nav a {
+    display: inline-block;
+    padding: 10px 20px;
+    margin: 0 10px;
+    text-decoration: none;
+    color: #667eea;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+
+nav a:hover, nav a.active {
+    background: #667eea;
+    color: white;
+}
+
+.verification-area {
+    text-align: center;
+}
+
+.camera-section {
+    margin-bottom: 30px;
+}
+
+#video {
+    width: 100%;
+    max-width: 640px;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+    background: #000;
+}
+
+.status-message {
+    margin-top: 15px;
+    padding: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.controls {
+    margin: 30px 0;
+}
+
+.qr-input-section {
+    margin-bottom: 20px;
+}
+
+.qr-input-section label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #333;
+}
+
+.qr-input-section input {
+    padding: 12px;
+    font-size: 1em;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    width: 300px;
+    margin-right: 10px;
+}
+
+button {
+    padding: 12px 30px;
+    font-size: 1em;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+}
+
+.verify-button {
+    background: #4CAF50;
+    color: white;
+    margin: 10px;
+}
+
+.verify-button:hover {
+    background: #45a049;
+    transform: scale(1.05);
+}
+
+.capture-button {
+    background: #2196F3;
+    color: white;
+    margin: 10px;
+}
+
+.capture-button:hover {
+    background: #0b7dda;
+    transform: scale(1.05);
+}
+
+#scan-qr-btn {
+    background: #ff9800;
+    color: white;
+}
+
+#scan-qr-btn:hover {
+    background: #e68900;
+}
+
+.result-message {
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 10px;
+    font-size: 1.2em;
+    font-weight: bold;
+    min-height: 60px;
+}
+
+.result-message.success {
+    background: #d4edda;
+    color: #155724;
+    border: 2px solid #c3e6cb;
+}
+
+.result-message.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 2px solid #f5c6cb;
+}
+
+.result-message.warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 2px solid #ffeeba;
+}
+
+.admin-link {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 2px solid #e0e0e0;
+}
+
+.admin-link a {
+    color: #667eea;
+    text-decoration: none;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.admin-link a:hover {
+    text-decoration: underline;
+}
+
+/* Admin Panel Styles */
+.admin-panel {
+    display: grid;
+    gap: 30px;
+}
+
+.section {
+    background: #f8f9fa;
+    padding: 25px;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+}
+
+.section h2 {
+    color: #333;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #667eea;
+}
+
+.section h3 {
+    color: #555;
+    margin: 20px 0 15px 0;
+}
+
+.form-section {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+form input, form select {
+    padding: 12px;
+    font-size: 1em;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+
+form button {
+    background: #667eea;
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: bold;
+}
+
+form button:hover {
+    background: #5568d3;
+}
+
+.list-section {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.filter-section {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-section input {
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+
+.filter-section button {
+    padding: 10px 20px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.filter-section button:hover {
+    background: #5568d3;
+}
+
+.item-card {
+    background: white;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.item-info {
+    flex: 1;
+}
+
+.item-info strong {
+    color: #333;
+}
+
+.badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.badge.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge.inactive {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge.accept {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge.reject {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge.suspicious {
+    background: #fff3cd;
+    color: #856404;
+}
+
+

@@ -1,0 +1,353 @@
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import and_
+from datetime import datetime, date, timedelta
+import os
+import shutil
+from typing import List, Optional
+
+from database import get_db, init_db, User, Badge, AccessLog, ResultEnum
+from models import (
+    UserCreate, UserResponse, BadgeCreate, BadgeResponse,
+    VerificationRequest, VerificationResponse, AccessLogResponse
+)
+from face_recognition_service import FaceRecognitionService
+from qr_service import QRService
+from report_service import ReportService
+
+app = FastAPI(title="System Weryfikacji Tożsamości")
+
+# Inicjalizacja serwisów
+face_service = FaceRecognitionService()
+qr_service = QRService()
+report_service = ReportService()
+
+# Katalogi
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs("static", exist_ok=True)
+os.makedirs("reports", exist_ok=True)
+
+# Montowanie plików statycznych
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Inicjalizacja bazy danych przy starcie
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """Główna strona - ekran weryfikacji"""
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_panel():
+    """Panel administracyjny"""
+    with open("static/admin.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+# API Endpoints
+
+@app.post("/api/verify", response_model=VerificationResponse)
+async def verify_access(
+    qr_code: str = Form(...),
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Weryfikacja dostępu - skanowanie QR i rozpoznawanie twarzy
+    """
+    try:
+        # 1. Sprawdź czy kod QR istnieje w bazie
+        badge = db.query(Badge).filter(Badge.qr_code == qr_code).first()
+        if not badge:
+            return VerificationResponse(
+                success=False,
+                message="Nieprawidłowy kod QR",
+                result="REJECT"
+            )
+        
+        # 2. Sprawdź czy badge jest ważny
+        if badge.valid_until and badge.valid_until < date.today():
+            return VerificationResponse(
+                success=False,
+                message="Przepustka wygasła",
+                result="REJECT"
+            )
+        
+        # 3. Sprawdź czy użytkownik jest aktywny
+        user = db.query(User).filter(User.id == badge.user_id).first()
+        if not user or not user.is_active:
+            return VerificationResponse(
+                success=False,
+                message="Użytkownik nieaktywny",
+                result="REJECT"
+            )
+        
+        # 4. Zapisz zdjęcie
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_filename = f"{timestamp}_{user.id}.jpg"
+        image_path = os.path.join(UPLOAD_DIR, image_filename)
+        
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+        
+        # 5. Rozpoznaj twarz
+        face_result = face_service.recognize_face(image_path, threshold=0.6)
+        
+        if not face_result:
+            # Nie wykryto twarzy lub nie rozpoznano
+            log = AccessLog(
+                timestamp=datetime.now(),
+                result="REJECT",
+                match_score=0.0,
+                badge_id=badge.id,
+                user_id=user.id,
+                image_path=image_path
+            )
+            db.add(log)
+            db.commit()
+            
+            return VerificationResponse(
+                success=False,
+                message="Nie rozpoznano twarzy",
+                result="REJECT",
+                log_id=log.id
+            )
+        
+        recognized_face_id, match_score = face_result
+        
+        # 6. Sprawdź czy rozpoznana twarz pasuje do użytkownika z karty
+        if recognized_face_id != user.face_id:
+            # Podejrzana sytuacja - ktoś używa cudzej karty
+            log = AccessLog(
+                timestamp=datetime.now(),
+                result="SUSPICIOUS",
+                match_score=match_score,
+                badge_id=badge.id,
+                user_id=user.id,
+                image_path=image_path
+            )
+            db.add(log)
+            db.commit()
+            
+            return VerificationResponse(
+                success=False,
+                message="Niezgodność twarzy z kartą - podejrzana sytuacja",
+                result="SUSPICIOUS",
+                match_score=match_score,
+                user_id=user.id,
+                log_id=log.id
+            )
+        
+        # 7. Weryfikacja pomyślna
+        if match_score >= 0.6:
+            log = AccessLog(
+                timestamp=datetime.now(),
+                result="ACCEPT",
+                match_score=match_score,
+                badge_id=badge.id,
+                user_id=user.id,
+                image_path=image_path
+            )
+            db.add(log)
+            db.commit()
+            
+            return VerificationResponse(
+                success=True,
+                message="Dostęp przyznany",
+                result="ACCEPT",
+                match_score=match_score,
+                user_id=user.id,
+                log_id=log.id
+            )
+        else:
+            log = AccessLog(
+                timestamp=datetime.now(),
+                result="REJECT",
+                match_score=match_score,
+                badge_id=badge.id,
+                user_id=user.id,
+                image_path=image_path
+            )
+            db.add(log)
+            db.commit()
+            
+            return VerificationResponse(
+                success=False,
+                message="Niskie dopasowanie twarzy",
+                result="REJECT",
+                match_score=match_score,
+                log_id=log.id
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Błąd weryfikacji: {str(e)}")
+
+
+@app.post("/api/users", response_model=UserResponse)
+async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    """Tworzenie nowego użytkownika"""
+    db_user = User(
+        first_name=user.first_name,
+        last_name=user.last_name,
+        face_id=user.face_id,
+        is_active=user.is_active
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+@app.get("/api/users", response_model=List[UserResponse])
+async def get_users(db: Session = Depends(get_db)):
+    """Pobranie listy wszystkich użytkowników"""
+    users = db.query(User).all()
+    return users
+
+
+@app.get("/api/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: int, db: Session = Depends(get_db)):
+    """Pobranie użytkownika po ID"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    return user
+
+
+@app.post("/api/users/{user_id}/register-face")
+async def register_user_face(
+    user_id: int,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Rejestracja twarzy użytkownika"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    
+    # Zapisz zdjęcie
+    image_filename = f"register_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+    image_path = os.path.join(UPLOAD_DIR, image_filename)
+    
+    with open(image_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+    
+    # Zarejestruj twarz
+    success = face_service.register_face(image_path, user.face_id)
+    
+    if success:
+        return {"message": "Twarz zarejestrowana pomyślnie", "success": True}
+    else:
+        return {"message": "Nie wykryto twarzy na zdjęciu", "success": False}
+
+
+@app.post("/api/badges", response_model=BadgeResponse)
+async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db)):
+    """Tworzenie nowej przepustki"""
+    db_badge = Badge(
+        qr_code=badge.qr_code,
+        valid_until=badge.valid_until,
+        user_id=badge.user_id
+    )
+    db.add(db_badge)
+    db.commit()
+    db.refresh(db_badge)
+    return db_badge
+
+
+@app.get("/api/badges", response_model=List[BadgeResponse])
+async def get_badges(db: Session = Depends(get_db)):
+    """Pobranie listy wszystkich przepustek"""
+    badges = db.query(Badge).all()
+    return badges
+
+
+@app.get("/api/badges/{badge_id}/qr")
+async def get_badge_qr(badge_id: int, db: Session = Depends(get_db)):
+    """Generowanie kodu QR dla przepustki"""
+    badge = db.query(Badge).filter(Badge.id == badge_id).first()
+    if not badge:
+        raise HTTPException(status_code=404, detail="Przepustka nie znaleziona")
+    
+    qr_image = qr_service.generate_qr_code(badge.qr_code)
+    return {"qr_code": badge.qr_code, "qr_image": qr_image}
+
+
+@app.get("/api/logs", response_model=List[AccessLogResponse])
+async def get_logs(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Pobranie logów dostępu"""
+    query = db.query(AccessLog)
+    
+    if start_date:
+        start = datetime.fromisoformat(start_date)
+        query = query.filter(AccessLog.timestamp >= start)
+    
+    if end_date:
+        end = datetime.fromisoformat(end_date)
+        query = query.filter(AccessLog.timestamp <= end)
+    
+    logs = query.order_by(AccessLog.timestamp.desc()).limit(limit).all()
+    return logs
+
+
+@app.get("/api/reports/generate")
+async def generate_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Generowanie raportu PDF"""
+    start = datetime.now() - timedelta(days=30)
+    end = datetime.now()
+    
+    if start_date:
+        start = datetime.fromisoformat(start_date)
+    if end_date:
+        end = datetime.fromisoformat(end_date)
+    
+    # Pobierz logi
+    logs = db.query(AccessLog).filter(
+        and_(AccessLog.timestamp >= start, AccessLog.timestamp <= end)
+    ).all()
+    
+    # Konwersja do formatu dict
+    logs_data = []
+    for log in logs:
+        logs_data.append({
+            "timestamp": log.timestamp,
+            "result": log.result,
+            "match_score": log.match_score,
+            "badge_id": log.badge_id,
+            "user_id": log.user_id,
+            "image_path": log.image_path
+        })
+    
+    # Generuj raport
+    report_path = report_service.generate_access_report(logs_data, start, end)
+    
+    return FileResponse(
+        report_path,
+        media_type="application/pdf",
+        filename=os.path.basename(report_path)
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+

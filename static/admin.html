@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administracyjny</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Panel Administracyjny</h1>
+            <nav>
+                <a href="/">Weryfikacja</a>
+                <a href="/admin" class="active">Admin</a>
+            </nav>
+        </header>
+
+        <div class="admin-panel">
+            <!-- Sekcja użytkowników -->
+            <section class="section">
+                <h2>Zarządzanie Użytkownikami</h2>
+                
+                <div class="form-section">
+                    <h3>Dodaj nowego użytkownika</h3>
+                    <form id="user-form">
+                        <input type="text" id="first-name" placeholder="Imię" required>
+                        <input type="text" id="last-name" placeholder="Nazwisko" required>
+                        <input type="text" id="face-id" placeholder="Face ID (unikalny)" required>
+                        <label>
+                            <input type="checkbox" id="is-active" checked> Aktywny
+                        </label>
+                        <button type="submit">Dodaj użytkownika</button>
+                    </form>
+                </div>
+
+                <div class="form-section">
+                    <h3>Zarejestruj twarz użytkownika</h3>
+                    <form id="face-register-form">
+                        <select id="user-select" required>
+                            <option value="">Wybierz użytkownika</option>
+                        </select>
+                        <input type="file" id="face-image" accept="image/*" required>
+                        <button type="submit">Zarejestruj twarz</button>
+                    </form>
+                </div>
+
+                <div class="list-section">
+                    <h3>Lista użytkowników</h3>
+                    <div id="users-list"></div>
+                </div>
+            </section>
+
+            <!-- Sekcja przepustek -->
+            <section class="section">
+                <h2>Zarządzanie Przepustkami</h2>
+                
+                <div class="form-section">
+                    <h3>Dodaj nową przepustkę</h3>
+                    <form id="badge-form">
+                        <select id="badge-user-select" required>
+                            <option value="">Wybierz użytkownika</option>
+                        </select>
+                        <input type="text" id="qr-code-input" placeholder="Kod QR (lub zostaw puste - wygeneruje się automatycznie)">
+                        <input type="date" id="valid-until" required>
+                        <button type="submit">Dodaj przepustkę</button>
+                    </form>
+                </div>
+
+                <div class="list-section">
+                    <h3>Lista przepustek</h3>
+                    <div id="badges-list"></div>
+                </div>
+            </section>
+
+            <!-- Sekcja logów -->
+            <section class="section">
+                <h2>Logi Dostępu</h2>
+                
+                <div class="filter-section">
+                    <input type="date" id="start-date">
+                    <input type="date" id="end-date">
+                    <button id="filter-logs-btn">Filtruj</button>
+                    <button id="generate-report-btn">Generuj raport PDF</button>
+                </div>
+
+                <div class="list-section">
+                    <div id="logs-list"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Weryfikacji Tożsamości</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>System Weryfikacji Tożsamości</h1>
+            <p>Zeskanuj kod QR i ustaw się przed kamerą</p>
+        </header>
+
+        <div class="verification-area">
+            <div class="camera-section">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                <div id="status" class="status-message"></div>
+            </div>
+
+            <div class="controls">
+                <div class="qr-input-section">
+                    <label for="qr-code">Kod QR:</label>
+                    <input type="text" id="qr-code" placeholder="Wprowadź kod QR lub zeskanuj">
+                    <button id="scan-qr-btn">Skanuj QR</button>
+                </div>
+
+                <button id="verify-btn" class="verify-button">Zweryfikuj</button>
+                <button id="capture-btn" class="capture-button">Zrób zdjęcie</button>
+            </div>
+
+            <div id="result" class="result-message"></div>
+        </div>
+
+        <div class="admin-link">
+            <a href="/admin">Panel Administracyjny</a>
+        </div>
+    </div>
+
+    <script src="/static/main.js"></script>
+</body>
+</html>
+
+
