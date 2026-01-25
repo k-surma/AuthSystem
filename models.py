@@ -62,5 +62,7 @@ class VerificationResponse(BaseModel):
     match_score: Optional[float] = None
     user_id: Optional[int] = None
     log_id: Optional[int] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 

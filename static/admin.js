@@ -1,7 +1,122 @@
+// Zmienne dla autoryzacji
+let adminToken = null;
+
+// Funkcja do pobierania tokenu z localStorage
+function getAuthToken() {
+    return localStorage.getItem('admin_token');
+}
+
+// Funkcja do zapisywania tokenu
+function setAuthToken(token) {
+    localStorage.setItem('admin_token', token);
+    adminToken = token;
+}
+
+// Funkcja do usuwania tokenu
+function removeAuthToken() {
+    localStorage.removeItem('admin_token');
+    adminToken = null;
+}
+
+// Funkcja do dodawania tokenu do requestów
+function getAuthHeaders() {
+    const token = getAuthToken();
+    if (token) {
+        return {
+            'Authorization': `Bearer ${token}`
+        };
+    }
+    return {};
+}
+
+// Sprawdzenie autoryzacji
+async function checkAuth() {
+    const token = getAuthToken();
+    if (!token) {
+        return false;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/check-auth', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const data = await response.json();
+        return data.authenticated;
+    } catch (error) {
+        console.error('Błąd sprawdzania autoryzacji:', error);
+        return false;
+    }
+}
+
+// Logowanie
+async function login(password) {
+    try {
+        const formData = new FormData();
+        formData.append('password', password);
+        
+        const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                setAuthToken(data.token);
+                showAdminPanel();
+                return true;
+            }
+        } else {
+            const errorData = await response.json();
+            return { error: errorData.detail || 'Błąd logowania' };
+        }
+    } catch (error) {
+        console.error('Błąd logowania:', error);
+        return { error: 'Błąd połączenia z serwerem' };
+    }
+    return { error: 'Nieprawidłowe hasło' };
+}
+
+// Wylogowanie
+function logout() {
+    removeAuthToken();
+    showLoginForm();
+}
+
+// Pokazanie formularza logowania
+function showLoginForm() {
+    document.getElementById('login-section').style.display = 'block';
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('logout-btn').style.display = 'none';
+    document.getElementById('admin-password').value = '';
+}
+
+// Pokazanie panelu admina
+function showAdminPanel() {
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'grid';
+    document.getElementById('logout-btn').style.display = 'inline-block';
+    // Załaduj dane
+    loadUsers();
+    loadBadges();
+    loadLogs();
+}
+
 // Ładowanie użytkowników
 async function loadUsers() {
     try {
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users', {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const users = await response.json();
         
         const usersList = document.getElementById('users-list');
@@ -58,10 +173,16 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
         const response = await fetch('/api/users', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
             },
             body: JSON.stringify(userData)
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         if (response.ok) {
             alert('Użytkownik dodany pomyślnie!');
@@ -76,16 +197,101 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
     }
 });
 
+// Zmienne dla kamery w panelu admin
+let adminStream = null;
+let adminCapturedImage = null;
+
+// Uruchomienie kamery w panelu admin
+async function startAdminCamera() {
+    try {
+        adminStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user',
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            } 
+        });
+        const video = document.getElementById('admin-video');
+        video.srcObject = adminStream;
+        
+        document.getElementById('start-camera-btn').style.display = 'none';
+        document.getElementById('capture-photo-btn').style.display = 'inline-block';
+        document.getElementById('stop-camera-btn').style.display = 'inline-block';
+        document.getElementById('camera-status').textContent = 'Kamera gotowa. Kliknij "Zrób zdjęcie"';
+        document.getElementById('camera-status').style.color = '#4CAF50';
+    } catch (error) {
+        console.error('Błąd dostępu do kamery:', error);
+        document.getElementById('camera-status').textContent = 'Błąd: Nie można uzyskać dostępu do kamery';
+        document.getElementById('camera-status').style.color = '#f44336';
+    }
+}
+
+// Zatrzymanie kamery w panelu admin
+function stopAdminCamera() {
+    if (adminStream) {
+        adminStream.getTracks().forEach(track => track.stop());
+        adminStream = null;
+    }
+    const video = document.getElementById('admin-video');
+    if (video.srcObject) {
+        video.srcObject = null;
+    }
+    document.getElementById('start-camera-btn').style.display = 'inline-block';
+    document.getElementById('capture-photo-btn').style.display = 'none';
+    document.getElementById('stop-camera-btn').style.display = 'none';
+    document.getElementById('camera-status').textContent = '';
+    adminCapturedImage = null;
+}
+
+// Wykonanie zdjęcia w panelu admin
+function captureAdminPhoto() {
+    const video = document.getElementById('admin-video');
+    const canvas = document.getElementById('admin-canvas');
+    const context = canvas.getContext('2d');
+    
+    if (!video.videoWidth || !video.videoHeight) {
+        alert('Kamera nie jest jeszcze gotowa. Poczekaj chwilę.');
+        return;
+    }
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    
+    canvas.toBlob((blob) => {
+        adminCapturedImage = blob;
+        document.getElementById('camera-status').textContent = 'Zdjęcie wykonane! Możesz teraz zarejestrować twarz.';
+        document.getElementById('camera-status').style.color = '#4CAF50';
+    }, 'image/jpeg', 0.95);
+}
+
 // Rejestracja twarzy
 document.getElementById('face-register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const userId = document.getElementById('user-select').value;
-    const imageFile = document.getElementById('face-image').files[0];
+    const imageSource = document.querySelector('input[name="image-source"]:checked').value;
     
-    if (!userId || !imageFile) {
-        alert('Proszę wybrać użytkownika i zdjęcie');
+    if (!userId) {
+        alert('Proszę wybrać użytkownika');
         return;
+    }
+    
+    let imageFile = null;
+    
+    if (imageSource === 'file') {
+        imageFile = document.getElementById('face-image').files[0];
+        if (!imageFile) {
+            alert('Proszę wybrać zdjęcie z komputera');
+            return;
+        }
+    } else {
+        if (!adminCapturedImage) {
+            alert('Proszę najpierw wykonać zdjęcie');
+            return;
+        }
+        // Konwertuj blob na File
+        imageFile = new File([adminCapturedImage], 'photo.jpg', { type: 'image/jpeg' });
     }
     
     const formData = new FormData();
@@ -94,14 +300,26 @@ document.getElementById('face-register-form').addEventListener('submit', async (
     try {
         const response = await fetch(`/api/users/${userId}/register-face`, {
             method: 'POST',
+            headers: getAuthHeaders(),
             body: formData
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         const data = await response.json();
         
         if (data.success) {
             alert('Twarz zarejestrowana pomyślnie!');
             document.getElementById('face-register-form').reset();
+            // Reset kamery
+            stopAdminCamera();
+            // Reset wyboru źródła
+            document.querySelector('input[name="image-source"][value="file"]').checked = true;
+            document.getElementById('file-upload-section').style.display = 'block';
+            document.getElementById('camera-section').style.display = 'none';
         } else {
             alert('Błąd: ' + data.message);
         }
@@ -114,7 +332,15 @@ document.getElementById('face-register-form').addEventListener('submit', async (
 // Ładowanie przepustek
 async function loadBadges() {
     try {
-        const response = await fetch('/api/badges');
+        const response = await fetch('/api/badges', {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const badges = await response.json();
         
         const badgesList = document.getElementById('badges-list');
@@ -122,7 +348,15 @@ async function loadBadges() {
         
         for (const badge of badges) {
             // Pobierz informacje o użytkowniku
-            const userResponse = await fetch(`/api/users/${badge.user_id}`);
+            const userResponse = await fetch(`/api/users/${badge.user_id}`, {
+                headers: getAuthHeaders()
+            });
+            
+            if (userResponse.status === 401) {
+                logout();
+                return;
+            }
+            
             const user = await userResponse.json();
             
             const card = document.createElement('div');
@@ -147,7 +381,15 @@ async function loadBadges() {
 // Generowanie QR
 async function generateQR(badgeId) {
     try {
-        const response = await fetch(`/api/badges/${badgeId}/qr`);
+        const response = await fetch(`/api/badges/${badgeId}/qr`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const data = await response.json();
         
         // Otwórz QR w nowym oknie
@@ -189,10 +431,16 @@ document.getElementById('badge-form').addEventListener('submit', async (e) => {
         const response = await fetch('/api/badges', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
             },
             body: JSON.stringify(badgeData)
         });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         if (response.ok) {
             alert('Przepustka dodana pomyślnie!');
@@ -217,7 +465,15 @@ async function loadLogs() {
     if (endDate) url += `&end_date=${endDate}T23:59:59`;
     
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const logs = await response.json();
         
         const logsList = document.getElementById('logs-list');
@@ -262,7 +518,15 @@ document.getElementById('generate-report-btn').addEventListener('click', async (
     if (endDate) url += `&end_date=${endDate}T23:59:59`;
     
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -284,10 +548,14 @@ document.getElementById('generate-report-btn').addEventListener('click', async (
 });
 
 // Inicjalizacja przy załadowaniu strony
-document.addEventListener('DOMContentLoaded', () => {
-    loadUsers();
-    loadBadges();
-    loadLogs();
+document.addEventListener('DOMContentLoaded', async () => {
+    // Sprawdź czy użytkownik jest zalogowany
+    const isAuthenticated = await checkAuth();
+    if (isAuthenticated) {
+        showAdminPanel();
+    } else {
+        showLoginForm();
+    }
     
     // Ustaw domyślne daty (ostatnie 30 dni)
     const endDate = new Date();
@@ -296,6 +564,69 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
     document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
+    
+    // Obsługa formularza logowania
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = document.getElementById('admin-password').value;
+        const errorDiv = document.getElementById('login-error');
+        
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+        
+        const result = await login(password);
+        if (result === true) {
+            // Sukces - panel już pokazany w funkcji login
+        } else {
+            errorDiv.textContent = result.error || 'Nieprawidłowe hasło';
+            errorDiv.style.display = 'block';
+        }
+    });
+    
+    // Obsługa wylogowania
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    
+    // Przełączanie między wyborem pliku a kamerą
+    document.querySelectorAll('input[name="image-source"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const fileSection = document.getElementById('file-upload-section');
+            const cameraSection = document.getElementById('camera-section');
+            
+            if (e.target.value === 'file') {
+                fileSection.style.display = 'block';
+                cameraSection.style.display = 'none';
+                // Zatrzymaj kamerę jeśli była uruchomiona
+                stopAdminCamera();
+                adminCapturedImage = null;
+            } else {
+                fileSection.style.display = 'none';
+                cameraSection.style.display = 'block';
+                // Wyczyść wybór pliku
+                document.getElementById('face-image').value = '';
+            }
+        });
+    });
+    
+    // Event listeners dla kamery
+    const startCameraBtn = document.getElementById('start-camera-btn');
+    const stopCameraBtn = document.getElementById('stop-camera-btn');
+    const capturePhotoBtn = document.getElementById('capture-photo-btn');
+    
+    if (startCameraBtn) {
+        startCameraBtn.addEventListener('click', startAdminCamera);
+    }
+    if (stopCameraBtn) {
+        stopCameraBtn.addEventListener('click', stopAdminCamera);
+    }
+    if (capturePhotoBtn) {
+        capturePhotoBtn.addEventListener('click', captureAdminPhoto);
+    }
 });
+
+// Cleanup kamery przy zamknięciu strony
+window.addEventListener('beforeunload', () => {
+    stopAdminCamera();
+});
+
 
 

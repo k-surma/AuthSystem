@@ -14,21 +14,29 @@
         </header>
 
         <div class="verification-area">
-            <div class="camera-section">
-                <video id="video" autoplay playsinline></video>
-                <canvas id="canvas" style="display: none;"></canvas>
-                <div id="status" class="status-message"></div>
+            <!-- Krok 1: Skanowanie QR -->
+            <div id="qr-scan-section">
+                <h2>Krok 1: Zeskanuj kod QR</h2>
+                <div id="qr-scan-area">
+                    <video id="qr-video" autoplay playsinline style="width: 100%; max-width: 400px; border-radius: 8px; background: #000; display: none;"></video>
+                    <canvas id="qr-canvas" style="display: none;"></canvas>
+                    <input type="text" id="qr-code" placeholder="Wprowadź kod QR lub zeskanuj" style="width: 100%; max-width: 400px; padding: 12px; margin: 10px 0; border: 2px solid #ddd; border-radius: 5px;">
+                    <div style="margin: 10px 0;">
+                        <button id="start-qr-scan-btn" class="capture-button">Uruchom skanowanie QR</button>
+                        <button id="stop-qr-scan-btn" class="capture-button" style="display: none; background: #f44336;">Zatrzymaj skanowanie</button>
+                    </div>
+                    <div id="qr-status" style="margin-top: 10px; color: #666; font-weight: 500; min-height: 20px;"></div>
+                </div>
             </div>
 
-            <div class="controls">
-                <div class="qr-input-section">
-                    <label for="qr-code">Kod QR:</label>
-                    <input type="text" id="qr-code" placeholder="Wprowadź kod QR lub zeskanuj">
-                    <button id="scan-qr-btn">Skanuj QR</button>
+            <!-- Krok 2: Weryfikacja twarzy -->
+            <div id="face-verify-section" style="display: none;">
+                <h2>Krok 2: Weryfikacja twarzy</h2>
+                <div class="camera-section">
+                    <video id="video" autoplay playsinline style="width: 100%; max-width: 640px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2); background: #000;"></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    <div id="status" class="status-message"></div>
                 </div>
-
-                <button id="verify-btn" class="verify-button">Zweryfikuj</button>
-                <button id="capture-btn" class="capture-button">Zrób zdjęcie</button>
             </div>
 
             <div id="result" class="result-message"></div>
@@ -39,6 +47,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="/static/main.js"></script>
 </body>
 </html>

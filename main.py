@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPHeader
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from datetime import datetime, date, timedelta
+from jose import JWTError, jwt
 import os
 import shutil
 from typing import List, Optional
@@ -19,10 +21,18 @@ from report_service import ReportService
 
 app = FastAPI(title="System Weryfikacji Tożsamości")
 
+# Konfiguracja JWT
+SECRET_KEY = "admin-secret-key-change-in-production"
+ALGORITHM = "HS256"
+ADMIN_PASSWORD = "admin"
+
 # Inicjalizacja serwisów
 face_service = FaceRecognitionService()
 qr_service = QRService()
 report_service = ReportService()
+
+# Security
+security = HTTPBearer(auto_error=False)
 
 # Katalogi
 UPLOAD_DIR = "uploads"
@@ -51,6 +61,69 @@ async def admin_panel():
     """Panel administracyjny"""
     with open("static/admin.html", "r", encoding="utf-8") as f:
         return f.read()
+
+
+# Funkcja do tworzenia tokenu JWT
+def create_access_token():
+    """Tworzy token JWT dla admina"""
+    expire = datetime.utcnow() + timedelta(hours=24)
+    to_encode = {"sub": "admin", "exp": expire}
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+# Dependency do sprawdzania autoryzacji
+async def verify_admin_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """Sprawdza czy token jest prawidłowy"""
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Brak autoryzacji"
+        )
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("sub") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Nieprawidłowy token"
+            )
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Nieprawidłowy token"
+        )
+
+
+# Endpoint logowania
+@app.post("/api/admin/login")
+async def admin_login(password: str = Form(...)):
+    """Logowanie do panelu admina"""
+    if password == "admin":
+        token = create_access_token()
+        return {"success": True, "token": token, "message": "Zalogowano pomyślnie"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Nieprawidłowe hasło"
+        )
+
+
+# Endpoint sprawdzania autoryzacji
+@app.get("/api/admin/check-auth")
+async def check_auth(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """Sprawdza czy użytkownik jest zalogowany"""
+    if not credentials:
+        return {"authenticated": False}
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("sub") == "admin":
+            return {"authenticated": True}
+    except JWTError:
+        pass
+    return {"authenticated": False}
 
 
 # API Endpoints
@@ -166,7 +239,9 @@ async def verify_access(
                 result="ACCEPT",
                 match_score=match_score,
                 user_id=user.id,
-                log_id=log.id
+                log_id=log.id,
+                first_name=user.first_name,
+                last_name=user.last_name
             )
         else:
             log = AccessLog(
@@ -193,7 +268,7 @@ async def verify_access(
 
 
 @app.post("/api/users", response_model=UserResponse)
-async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+async def create_user(user: UserCreate, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
     """Tworzenie nowego użytkownika"""
     db_user = User(
         first_name=user.first_name,
@@ -208,14 +283,14 @@ async def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/users", response_model=List[UserResponse])
-async def get_users(db: Session = Depends(get_db)):
+async def get_users(db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
     """Pobranie listy wszystkich użytkowników"""
     users = db.query(User).all()
     return users
 
 
 @app.get("/api/users/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Session = Depends(get_db)):
+async def get_user(user_id: int, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
     """Pobranie użytkownika po ID"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -227,7 +302,8 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
 async def register_user_face(
     user_id: int,
     image: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    token: dict = Depends(verify_admin_token)
 ):
     """Rejestracja twarzy użytkownika"""
     user = db.query(User).filter(User.id == user_id).first()
@@ -251,7 +327,7 @@ async def register_user_face(
 
 
 @app.post("/api/badges", response_model=BadgeResponse)
-async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db)):
+async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
     """Tworzenie nowej przepustki"""
     db_badge = Badge(
         qr_code=badge.qr_code,
@@ -265,14 +341,14 @@ async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/badges", response_model=List[BadgeResponse])
-async def get_badges(db: Session = Depends(get_db)):
+async def get_badges(db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
     """Pobranie listy wszystkich przepustek"""
     badges = db.query(Badge).all()
     return badges
 
 
 @app.get("/api/badges/{badge_id}/qr")
-async def get_badge_qr(badge_id: int, db: Session = Depends(get_db)):
+async def get_badge_qr(badge_id: int, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
     """Generowanie kodu QR dla przepustki"""
     badge = db.query(Badge).filter(Badge.id == badge_id).first()
     if not badge:
@@ -282,12 +358,34 @@ async def get_badge_qr(badge_id: int, db: Session = Depends(get_db)):
     return {"qr_code": badge.qr_code, "qr_image": qr_image}
 
 
+@app.get("/api/users/{user_id}/check-qr")
+async def check_user_qr(user_id: int, qr_code: str, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+    """Sprawdzenie czy kod QR należy do użytkownika"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+    
+    badge = db.query(Badge).filter(Badge.qr_code == qr_code).first()
+    if not badge:
+        return {"valid": False, "message": "Kod QR nie istnieje"}
+    
+    if badge.user_id != user_id:
+        return {"valid": False, "message": "Kod QR nie należy do tego użytkownika"}
+    
+    # Sprawdź czy badge jest ważny
+    if badge.valid_until and badge.valid_until < date.today():
+        return {"valid": False, "message": "Przepustka wygasła"}
+    
+    return {"valid": True, "message": "Kod QR jest prawidłowy"}
+
+
 @app.get("/api/logs", response_model=List[AccessLogResponse])
 async def get_logs(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    token: dict = Depends(verify_admin_token)
 ):
     """Pobranie logów dostępu"""
     query = db.query(AccessLog)
@@ -308,7 +406,8 @@ async def get_logs(
 async def generate_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    token: dict = Depends(verify_admin_token)
 ):
     """Generowanie raportu PDF"""
     start = datetime.now() - timedelta(days=30)

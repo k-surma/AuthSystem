@@ -61,6 +61,35 @@ nav a:hover, nav a.active {
     text-align: center;
 }
 
+#qr-scan-section {
+    margin-bottom: 30px;
+}
+
+#qr-scan-section h2 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+#face-verify-section h2 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+#qr-scan-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+#qr-status {
+    font-size: 1em;
+    font-weight: 500;
+    min-height: 25px;
+}
+
 .camera-section {
     margin-bottom: 30px;
 }
@@ -337,6 +366,173 @@ form button:hover {
 .badge.suspicious {
     background: #fff3cd;
     color: #856404;
+}
+
+/* QR Scan section */
+#qr-scan-section {
+    margin: 15px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+#qr-scan-area {
+    margin-top: 10px;
+}
+
+#qr-scan-area button {
+    margin: 5px;
+    padding: 10px 20px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+#qr-scan-area button:hover {
+    background: #0b7dda;
+}
+
+#stop-qr-scan-btn {
+    background: #f44336 !important;
+}
+
+#stop-qr-scan-btn:hover {
+    background: #d32f2f !important;
+}
+
+#qr-status {
+    font-size: 0.9em;
+    font-weight: 500;
+    min-height: 20px;
+}
+
+#face-capture-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid #e0e0e0;
+}
+
+/* Camera section in admin panel */
+.image-source-toggle {
+    display: flex;
+    gap: 20px;
+    margin: 15px 0;
+    padding: 10px;
+    background: #f0f0f0;
+    border-radius: 5px;
+}
+
+.image-source-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+.image-source-toggle input[type="radio"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+#camera-section {
+    margin: 15px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+#camera-section button {
+    margin: 5px;
+    padding: 10px 20px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+#camera-section button:hover {
+    background: #0b7dda;
+}
+
+#stop-camera-btn {
+    background: #f44336 !important;
+}
+
+#stop-camera-btn:hover {
+    background: #d32f2f !important;
+}
+
+#capture-photo-btn {
+    background: #4CAF50 !important;
+}
+
+#capture-photo-btn:hover {
+    background: #45a049 !important;
+}
+
+#camera-status {
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+/* Login section */
+.login-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+}
+
+.login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+    max-width: 400px;
+    width: 100%;
+}
+
+.login-box h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+}
+
+.login-box form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.login-box input {
+    padding: 12px;
+    font-size: 1em;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+
+.login-box button {
+    background: #667eea;
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: bold;
+}
+
+.login-box button:hover {
+    background: #5568d3;
 }
 
 
