@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPHeader
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from datetime import datetime, date, timedelta
@@ -268,7 +268,7 @@ async def verify_access(
 
 
 @app.post("/api/users", response_model=UserResponse)
-async def create_user(user: UserCreate, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def create_user(user: UserCreate, db: Session = Depends(get_db)):
     """Tworzenie nowego użytkownika"""
     db_user = User(
         first_name=user.first_name,
@@ -283,14 +283,14 @@ async def create_user(user: UserCreate, db: Session = Depends(get_db), token: di
 
 
 @app.get("/api/users", response_model=List[UserResponse])
-async def get_users(db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def get_users(db: Session = Depends(get_db)):
     """Pobranie listy wszystkich użytkowników"""
     users = db.query(User).all()
     return users
 
 
 @app.get("/api/users/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def get_user(user_id: int, db: Session = Depends(get_db)):
     """Pobranie użytkownika po ID"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -302,8 +302,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db), token: dict = De
 async def register_user_face(
     user_id: int,
     image: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    token: dict = Depends(verify_admin_token)
+    db: Session = Depends(get_db)
 ):
     """Rejestracja twarzy użytkownika"""
     user = db.query(User).filter(User.id == user_id).first()
@@ -327,7 +326,7 @@ async def register_user_face(
 
 
 @app.post("/api/badges", response_model=BadgeResponse)
-async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db)):
     """Tworzenie nowej przepustki"""
     db_badge = Badge(
         qr_code=badge.qr_code,
@@ -341,14 +340,14 @@ async def create_badge(badge: BadgeCreate, db: Session = Depends(get_db), token:
 
 
 @app.get("/api/badges", response_model=List[BadgeResponse])
-async def get_badges(db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def get_badges(db: Session = Depends(get_db)):
     """Pobranie listy wszystkich przepustek"""
     badges = db.query(Badge).all()
     return badges
 
 
 @app.get("/api/badges/{badge_id}/qr")
-async def get_badge_qr(badge_id: int, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def get_badge_qr(badge_id: int, db: Session = Depends(get_db)):
     """Generowanie kodu QR dla przepustki"""
     badge = db.query(Badge).filter(Badge.id == badge_id).first()
     if not badge:
@@ -359,7 +358,7 @@ async def get_badge_qr(badge_id: int, db: Session = Depends(get_db), token: dict
 
 
 @app.get("/api/users/{user_id}/check-qr")
-async def check_user_qr(user_id: int, qr_code: str, db: Session = Depends(get_db), token: dict = Depends(verify_admin_token)):
+async def check_user_qr(user_id: int, qr_code: str, db: Session = Depends(get_db)):
     """Sprawdzenie czy kod QR należy do użytkownika"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -384,8 +383,7 @@ async def get_logs(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    token: dict = Depends(verify_admin_token)
+    db: Session = Depends(get_db)
 ):
     """Pobranie logów dostępu"""
     query = db.query(AccessLog)
@@ -406,8 +404,7 @@ async def get_logs(
 async def generate_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    db: Session = Depends(get_db),
-    token: dict = Depends(verify_admin_token)
+    db: Session = Depends(get_db)
 ):
     """Generowanie raportu PDF"""
     start = datetime.now() - timedelta(days=30)

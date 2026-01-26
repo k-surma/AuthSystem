@@ -1,108 +1,49 @@
-// Zmienne dla autoryzacji
-let adminToken = null;
+// Proste "logowanie" po stronie frontend z hasłem "admin"
+const ADMIN_PASSWORD = 'admin';
+let isLoggedIn = false;
 
-// Funkcja do pobierania tokenu z localStorage
-function getAuthToken() {
-    return localStorage.getItem('admin_token');
-}
-
-// Funkcja do zapisywania tokenu
-function setAuthToken(token) {
-    localStorage.setItem('admin_token', token);
-    adminToken = token;
-}
-
-// Funkcja do usuwania tokenu
-function removeAuthToken() {
-    localStorage.removeItem('admin_token');
-    adminToken = null;
-}
-
-// Funkcja do dodawania tokenu do requestów
+// Nagłówki autoryzacji – brak backendowej autoryzacji, zwracamy puste
 function getAuthHeaders() {
-    const token = getAuthToken();
-    if (token) {
-        return {
-            'Authorization': `Bearer ${token}`
-        };
-    }
     return {};
 }
 
-// Sprawdzenie autoryzacji
-async function checkAuth() {
-    const token = getAuthToken();
-    if (!token) {
-        return false;
-    }
-    
-    try {
-        const response = await fetch('/api/admin/check-auth', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const data = await response.json();
-        return data.authenticated;
-    } catch (error) {
-        console.error('Błąd sprawdzania autoryzacji:', error);
-        return false;
-    }
-}
-
-// Logowanie
-async function login(password) {
-    try {
-        const formData = new FormData();
-        formData.append('password', password);
-        
-        const response = await fetch('/api/admin/login', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success) {
-                setAuthToken(data.token);
-                showAdminPanel();
-                return true;
-            }
-        } else {
-            const errorData = await response.json();
-            return { error: errorData.detail || 'Błąd logowania' };
-        }
-    } catch (error) {
-        console.error('Błąd logowania:', error);
-        return { error: 'Błąd połączenia z serwerem' };
-    }
-    return { error: 'Nieprawidłowe hasło' };
-}
-
-// Wylogowanie
-function logout() {
-    removeAuthToken();
-    showLoginForm();
-}
-
-// Pokazanie formularza logowania
 function showLoginForm() {
-    document.getElementById('login-section').style.display = 'block';
-    document.getElementById('admin-panel').style.display = 'none';
-    document.getElementById('logout-btn').style.display = 'none';
-    document.getElementById('admin-password').value = '';
+    const loginSection = document.getElementById('login-section');
+    const adminPanel = document.getElementById('admin-panel');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    if (loginSection) loginSection.style.display = 'block';
+    if (adminPanel) adminPanel.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+
+    const passwordInput = document.getElementById('admin-password');
+    const errorDiv = document.getElementById('login-error');
+    if (passwordInput) passwordInput.value = '';
+    if (errorDiv) {
+        errorDiv.textContent = '';
+        errorDiv.style.display = 'none';
+    }
 }
 
-// Pokazanie panelu admina
+// Pokazanie panelu admina i załadowanie danych
 function showAdminPanel() {
-    document.getElementById('login-section').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'grid';
-    document.getElementById('logout-btn').style.display = 'inline-block';
+    const loginSection = document.getElementById('login-section');
+    const adminPanel = document.getElementById('admin-panel');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    if (loginSection) loginSection.style.display = 'none';
+    if (adminPanel) adminPanel.style.display = 'grid';
+    if (logoutBtn) logoutBtn.style.display = 'inline-block';
+
     // Załaduj dane
     loadUsers();
     loadBadges();
     loadLogs();
+}
+
+function logout() {
+    isLoggedIn = false;
+    showLoginForm();
 }
 
 // Ładowanie użytkowników
@@ -111,12 +52,6 @@ async function loadUsers() {
         const response = await fetch('/api/users', {
             headers: getAuthHeaders()
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         const users = await response.json();
         
         const usersList = document.getElementById('users-list');
@@ -178,12 +113,6 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
             },
             body: JSON.stringify(userData)
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         if (response.ok) {
             alert('Użytkownik dodany pomyślnie!');
             document.getElementById('user-form').reset();
@@ -303,12 +232,6 @@ document.getElementById('face-register-form').addEventListener('submit', async (
             headers: getAuthHeaders(),
             body: formData
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         const data = await response.json();
         
         if (data.success) {
@@ -335,12 +258,6 @@ async function loadBadges() {
         const response = await fetch('/api/badges', {
             headers: getAuthHeaders()
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         const badges = await response.json();
         
         const badgesList = document.getElementById('badges-list');
@@ -351,12 +268,6 @@ async function loadBadges() {
             const userResponse = await fetch(`/api/users/${badge.user_id}`, {
                 headers: getAuthHeaders()
             });
-            
-            if (userResponse.status === 401) {
-                logout();
-                return;
-            }
-            
             const user = await userResponse.json();
             
             const card = document.createElement('div');
@@ -384,12 +295,6 @@ async function generateQR(badgeId) {
         const response = await fetch(`/api/badges/${badgeId}/qr`, {
             headers: getAuthHeaders()
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         const data = await response.json();
         
         // Otwórz QR w nowym oknie
@@ -436,12 +341,6 @@ document.getElementById('badge-form').addEventListener('submit', async (e) => {
             },
             body: JSON.stringify(badgeData)
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         if (response.ok) {
             alert('Przepustka dodana pomyślnie!');
             document.getElementById('badge-form').reset();
@@ -468,12 +367,6 @@ async function loadLogs() {
         const response = await fetch(url, {
             headers: getAuthHeaders()
         });
-        
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         const logs = await response.json();
         
         const logsList = document.getElementById('logs-list');
@@ -522,11 +415,6 @@ document.getElementById('generate-report-btn').addEventListener('click', async (
             headers: getAuthHeaders()
         });
         
-        if (response.status === 401) {
-            logout();
-            return;
-        }
-        
         if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -549,13 +437,8 @@ document.getElementById('generate-report-btn').addEventListener('click', async (
 
 // Inicjalizacja przy załadowaniu strony
 document.addEventListener('DOMContentLoaded', async () => {
-    // Sprawdź czy użytkownik jest zalogowany
-    const isAuthenticated = await checkAuth();
-    if (isAuthenticated) {
-        showAdminPanel();
-    } else {
-        showLoginForm();
-    }
+    // Najpierw pokaż formularz logowania
+    showLoginForm();
     
     // Ustaw domyślne daty (ostatnie 30 dni)
     const endDate = new Date();
@@ -564,28 +447,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
     document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
-    
-    // Obsługa formularza logowania
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const password = document.getElementById('admin-password').value;
-        const errorDiv = document.getElementById('login-error');
-        
-        errorDiv.style.display = 'none';
-        errorDiv.textContent = '';
-        
-        const result = await login(password);
-        if (result === true) {
-            // Sukces - panel już pokazany w funkcji login
-        } else {
-            errorDiv.textContent = result.error || 'Nieprawidłowe hasło';
-            errorDiv.style.display = 'block';
-        }
-    });
-    
+
+    // Obsługa formularza logowania (proste sprawdzenie hasła po stronie klienta)
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const password = document.getElementById('admin-password').value;
+            const errorDiv = document.getElementById('login-error');
+
+            if (password === ADMIN_PASSWORD) {
+                isLoggedIn = true;
+                if (errorDiv) {
+                    errorDiv.style.display = 'none';
+                    errorDiv.textContent = '';
+                }
+                showAdminPanel();
+            } else {
+                if (errorDiv) {
+                    errorDiv.textContent = 'Nieprawidłowe hasło';
+                    errorDiv.style.display = 'block';
+                } else {
+                    alert('Nieprawidłowe hasło');
+                }
+            }
+        });
+    }
+
     // Obsługa wylogowania
-    document.getElementById('logout-btn').addEventListener('click', logout);
-    
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
     // Przełączanie między wyborem pliku a kamerą
     document.querySelectorAll('input[name="image-source"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
