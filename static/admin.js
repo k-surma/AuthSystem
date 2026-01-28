@@ -1,8 +1,6 @@
-// Proste "logowanie" po stronie frontend z hasłem "admin"
 const ADMIN_PASSWORD = 'admin';
 let isLoggedIn = false;
 
-// Nagłówki autoryzacji – brak backendowej autoryzacji, zwracamy puste
 function getAuthHeaders() {
     return {};
 }
@@ -25,7 +23,6 @@ function showLoginForm() {
     }
 }
 
-// Pokazanie panelu admina i załadowanie danych
 function showAdminPanel() {
     const loginSection = document.getElementById('login-section');
     const adminPanel = document.getElementById('admin-panel');
@@ -35,7 +32,6 @@ function showAdminPanel() {
     if (adminPanel) adminPanel.style.display = 'grid';
     if (logoutBtn) logoutBtn.style.display = 'inline-block';
 
-    // Załaduj dane
     loadUsers();
     loadBadges();
     loadLogs();
@@ -46,7 +42,6 @@ function logout() {
     showLoginForm();
 }
 
-// Ładowanie użytkowników
 async function loadUsers() {
     try {
         const response = await fetch('/api/users', {
@@ -58,13 +53,11 @@ async function loadUsers() {
         const userSelect = document.getElementById('user-select');
         const badgeUserSelect = document.getElementById('badge-user-select');
         
-        // Wyczyść listy
         usersList.innerHTML = '';
         userSelect.innerHTML = '<option value="">Wybierz użytkownika</option>';
         badgeUserSelect.innerHTML = '<option value="">Wybierz użytkownika</option>';
         
         users.forEach(user => {
-            // Dodaj do listy wyświetlanej
             const card = document.createElement('div');
             card.className = 'item-card';
             card.innerHTML = `
@@ -79,7 +72,6 @@ async function loadUsers() {
             `;
             usersList.appendChild(card);
             
-            // Dodaj do selectów
             const option1 = document.createElement('option');
             option1.value = user.id;
             option1.textContent = `${user.first_name} ${user.last_name} (${user.face_id})`;
@@ -93,14 +85,12 @@ async function loadUsers() {
     }
 }
 
-// Dodawanie użytkownika
 document.getElementById('user-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const userData = {
         first_name: document.getElementById('first-name').value,
         last_name: document.getElementById('last-name').value,
-        // face_id nie jest już wymagane - zostanie wygenerowane automatycznie przez backend
         is_active: document.getElementById('is-active').checked
     };
     
@@ -126,11 +116,9 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
     }
 });
 
-// Zmienne dla kamery w panelu admin
 let adminStream = null;
 let adminCapturedImage = null;
 
-// Uruchomienie kamery w panelu admin
 async function startAdminCamera() {
     try {
         adminStream = await navigator.mediaDevices.getUserMedia({ 
@@ -155,7 +143,6 @@ async function startAdminCamera() {
     }
 }
 
-// Zatrzymanie kamery w panelu admin
 function stopAdminCamera() {
     if (adminStream) {
         adminStream.getTracks().forEach(track => track.stop());
@@ -172,7 +159,6 @@ function stopAdminCamera() {
     adminCapturedImage = null;
 }
 
-// Wykonanie zdjęcia w panelu admin
 function captureAdminPhoto() {
     const video = document.getElementById('admin-video');
     const canvas = document.getElementById('admin-canvas');
@@ -194,7 +180,6 @@ function captureAdminPhoto() {
     }, 'image/jpeg', 0.95);
 }
 
-// Rejestracja twarzy
 document.getElementById('face-register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -219,7 +204,6 @@ document.getElementById('face-register-form').addEventListener('submit', async (
             alert('Proszę najpierw wykonać zdjęcie');
             return;
         }
-        // Konwertuj blob na File
         imageFile = new File([adminCapturedImage], 'photo.jpg', { type: 'image/jpeg' });
     }
     
@@ -237,9 +221,7 @@ document.getElementById('face-register-form').addEventListener('submit', async (
         if (data.success) {
             alert('Twarz zarejestrowana pomyślnie!');
             document.getElementById('face-register-form').reset();
-            // Reset kamery
             stopAdminCamera();
-            // Reset wyboru źródła
             document.querySelector('input[name="image-source"][value="file"]').checked = true;
             document.getElementById('file-upload-section').style.display = 'block';
             document.getElementById('camera-section').style.display = 'none';
@@ -252,7 +234,6 @@ document.getElementById('face-register-form').addEventListener('submit', async (
     }
 });
 
-// Ładowanie przepustek
 async function loadBadges() {
     try {
         const response = await fetch('/api/badges', {
@@ -264,7 +245,6 @@ async function loadBadges() {
         badgesList.innerHTML = '';
         
         for (const badge of badges) {
-            // Pobierz informacje o użytkowniku
             const userResponse = await fetch(`/api/users/${badge.user_id}`, {
                 headers: getAuthHeaders()
             });
@@ -289,7 +269,6 @@ async function loadBadges() {
     }
 }
 
-// Generowanie QR
 async function generateQR(badgeId) {
     try {
         const response = await fetch(`/api/badges/${badgeId}/qr`, {
@@ -297,7 +276,6 @@ async function generateQR(badgeId) {
         });
         const data = await response.json();
         
-        // Otwórz QR w nowym oknie
         const newWindow = window.open();
         newWindow.document.write(`
             <html>
@@ -315,7 +293,6 @@ async function generateQR(badgeId) {
     }
 }
 
-// Dodawanie przepustki
 document.getElementById('badge-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -323,7 +300,6 @@ document.getElementById('badge-form').addEventListener('submit', async (e) => {
     const userId = document.getElementById('badge-user-select').value;
     const validUntil = document.getElementById('valid-until').value;
     
-    // Jeśli kod QR nie został podany, wygeneruj losowy
     const finalQrCode = qrCode || `QR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const badgeData = {
@@ -354,7 +330,6 @@ document.getElementById('badge-form').addEventListener('submit', async (e) => {
     }
 });
 
-// Ładowanie logów
 async function loadLogs() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
@@ -398,10 +373,8 @@ async function loadLogs() {
     }
 }
 
-// Filtrowanie logów
 document.getElementById('filter-logs-btn').addEventListener('click', loadLogs);
 
-// Generowanie raportu
 document.getElementById('generate-report-btn').addEventListener('click', async () => {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
@@ -435,12 +408,9 @@ document.getElementById('generate-report-btn').addEventListener('click', async (
     }
 });
 
-// Inicjalizacja przy załadowaniu strony
 document.addEventListener('DOMContentLoaded', async () => {
-    // Najpierw pokaż formularz logowania
     showLoginForm();
     
-    // Ustaw domyślne daty (ostatnie 30 dni)
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
@@ -448,7 +418,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
     document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
 
-    // Obsługa formularza logowania (proste sprawdzenie hasła po stronie klienta)
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', (e) => {
@@ -474,12 +443,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Obsługa wylogowania
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', logout);
     }
-    // Przełączanie między wyborem pliku a kamerą
     document.querySelectorAll('input[name="image-source"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
             const fileSection = document.getElementById('file-upload-section');
@@ -488,19 +455,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.target.value === 'file') {
                 fileSection.style.display = 'block';
                 cameraSection.style.display = 'none';
-                // Zatrzymaj kamerę jeśli była uruchomiona
                 stopAdminCamera();
                 adminCapturedImage = null;
             } else {
                 fileSection.style.display = 'none';
                 cameraSection.style.display = 'block';
-                // Wyczyść wybór pliku
                 document.getElementById('face-image').value = '';
             }
         });
     });
     
-    // Event listeners dla kamery
     const startCameraBtn = document.getElementById('start-camera-btn');
     const stopCameraBtn = document.getElementById('stop-camera-btn');
     const capturePhotoBtn = document.getElementById('capture-photo-btn');
@@ -516,7 +480,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Cleanup kamery przy zamknięciu strony
 window.addEventListener('beforeunload', () => {
     stopAdminCamera();
 });

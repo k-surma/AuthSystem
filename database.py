@@ -50,7 +50,7 @@ class AccessLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
-    result = Column(String)  # ACCEPT, REJECT, SUSPICIOUS
+    result = Column(String)
     match_score = Column(Float)
     badge_id = Column(Integer, ForeignKey("badges.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

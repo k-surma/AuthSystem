@@ -14,7 +14,6 @@ class ReportService:
     
     @staticmethod
     def _strip_pl_accents(text: str) -> str:
-        """Usuwa polskie znaki diakrytyczne z tekstu (prosta transliteracja)."""
         if not isinstance(text, str):
             return text
         mapping = str.maketrans(
@@ -24,10 +23,6 @@ class ReportService:
         return text.translate(mapping)
 
     def generate_access_report(self, logs: List[dict], start_date: datetime = None, end_date: datetime = None) -> str:
-        """
-        Generuje raport PDF z logami dostępu
-        Zwraca ścieżkę do wygenerowanego pliku
-        """
         if start_date is None:
             start_date = datetime.now() - timedelta(days=30)
         if end_date is None:
@@ -48,19 +43,16 @@ class ReportService:
             spaceAfter=30,
         )
         
-        # Tytuł (bez polskich znakow)
         title_text = "Raport Dostepu - System Weryfikacji Tozsamosci"
         title = Paragraph(title_text, title_style)
         elements.append(title)
         
-        # Informacje o okresie
         period_text = f"Okres: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
         period_text = self._strip_pl_accents(period_text)
         period = Paragraph(period_text, styles['Normal'])
         elements.append(period)
         elements.append(Spacer(1, 0.2*inch))
         
-        # Statystyki
         total_logs = len(logs)
         accepted = sum(1 for log in logs if log.get('result') == 'ACCEPT')
         rejected = sum(1 for log in logs if log.get('result') == 'REJECT')
@@ -88,11 +80,10 @@ class ReportService:
         elements.append(stats_table)
         elements.append(Spacer(1, 0.3*inch))
         
-        # Tabela logow
         if logs:
             table_data = [['Data/Czas', 'Wynik', 'Score', 'User ID', 'Badge ID']]
             
-            for log in logs[:100]:  # Ograniczenie do 100 wierszy
+            for log in logs[:100]:
                 timestamp = log.get('timestamp', '')
                 if isinstance(timestamp, datetime):
                     timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S')
@@ -119,7 +110,6 @@ class ReportService:
             ]))
             elements.append(table)
 
-            # Sekcja ze zdjeciami nieudanych prob dostepu
             failed_logs = [
                 log for log in logs
                 if log.get('result') in ('REJECT', 'SUSPICIOUS')
@@ -145,7 +135,6 @@ class ReportService:
                             elements.append(img)
                             img_loaded = True
                         except Exception:
-                            # Pokaż informację, że nie udało się wczytać konkretnego obrazu
                             info_text = f"Nie udalo sie wczytac obrazu: {img_path}"
                             info = Paragraph(info_text, styles['Italic'])
                             elements.append(info)
@@ -171,7 +160,6 @@ class ReportService:
             no_data = Paragraph("Brak danych w wybranym okresie", styles['Normal'])
             elements.append(no_data)
         
-        # Generuj PDF
         doc.build(elements)
         return filepath
 

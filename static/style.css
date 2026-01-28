@@ -219,7 +219,6 @@ button {
     text-decoration: underline;
 }
 
-/* Admin Panel Styles */
 .admin-panel {
     display: grid;
     gap: 30px;
@@ -368,7 +367,6 @@ form button:hover {
     color: #856404;
 }
 
-/* QR Scan section */
 #qr-scan-section {
     margin: 15px 0;
     padding: 15px;
@@ -416,7 +414,6 @@ form button:hover {
     border-top: 2px solid #e0e0e0;
 }
 
-/* Camera section in admin panel */
 .image-source-toggle {
     display: flex;
     gap: 20px;
@@ -484,7 +481,6 @@ form button:hover {
     font-weight: 500;
 }
 
-/* Login section */
 .login-section {
     display: flex;
     justify-content: center;

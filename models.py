@@ -6,7 +6,7 @@ from typing import Optional
 class UserCreate(BaseModel):
     first_name: str
     last_name: str
-    face_id: Optional[str] = None  # Opcjonalne - jeśli nie podano, zostanie wygenerowane automatycznie
+    face_id: Optional[str] = None
     is_active: bool = True
 
 
@@ -39,7 +39,6 @@ class BadgeResponse(BaseModel):
 
 class VerificationRequest(BaseModel):
     qr_code: str
-    # image will be sent as form data
 
 
 class AccessLogResponse(BaseModel):
@@ -58,7 +57,7 @@ class AccessLogResponse(BaseModel):
 class VerificationResponse(BaseModel):
     success: bool
     message: str
-    result: str  # ACCEPT, REJECT, SUSPICIOUS
+    result: str
     match_score: Optional[float] = None
     user_id: Optional[int] = None
     log_id: Optional[int] = None

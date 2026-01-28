@@ -5,21 +5,18 @@ let qrScanInterval = null;
 let faceCaptureInterval = null;
 let validatedQrCode = null;
 let lastQrCode = null;
-let verificationCompleted = false; // Flaga zapobiegająca dalszemu próbkowaniu po weryfikacji
-let verificationInProgress = false; // Flaga zapobiegająca równoległym wywołaniom weryfikacji
-let capturedImages = []; // 2 klatki do liveness (mrugnięcie)
-let captureSessionActive = false; // zbieranie wielu próbek do liveness
+let verificationCompleted = false;
+let verificationInProgress = false;
+let capturedImages = [];
+let captureSessionActive = false;
 
-// Uruchomienie skanowania QR
 async function startQRScan() {
     try {
-        // Sprawdź czy jsQR jest dostępne
         if (typeof jsQR === 'undefined') {
             updateQRStatus('Błąd: Biblioteka jsQR nie jest załadowana. Odśwież stronę.', 'error');
             return;
         }
         
-        // Spróbuj najpierw tylnej kamery, potem przedniej
         let constraints = { 
             video: { 
                 width: { ideal: 640 },
@@ -28,16 +25,13 @@ async function startQRScan() {
         };
         
         try {
-            // Spróbuj tylnej kamery (dla QR kodów)
             constraints.video.facingMode = 'environment';
             qrStream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (e) {
-            // Jeśli tylna kamera nie działa, użyj przedniej
             try {
                 constraints.video.facingMode = 'user';
                 qrStream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (e2) {
-                // Jeśli określenie facingMode nie działa, spróbuj bez niego
                 delete constraints.video.facingMode;
                 qrStream = await navigator.mediaDevices.getUserMedia(constraints);
             }
@@ -51,14 +45,12 @@ async function startQRScan() {
         video.srcObject = qrStream;
         video.style.display = 'block';
         
-        // Poczekaj aż video będzie gotowe
         video.onloadedmetadata = () => {
             document.getElementById('start-qr-scan-btn').style.display = 'none';
             document.getElementById('stop-qr-scan-btn').style.display = 'inline-block';
             updateQRStatus('Skanowanie QR...', 'info');
             
-            // Automatyczne skanowanie QR kilka razy na sekundę
-            qrScanInterval = setInterval(scanQRCode, 200); // 5 razy na sekundę
+            qrScanInterval = setInterval(scanQRCode, 200);
         };
         
     } catch (error) {
@@ -67,7 +59,6 @@ async function startQRScan() {
     }
 }
 
-// Zatrzymanie skanowania QR
 function stopQRScan() {
     if (qrStream) {
         qrStream.getTracks().forEach(track => track.stop());
@@ -88,7 +79,6 @@ function stopQRScan() {
     document.getElementById('stop-qr-scan-btn').style.display = 'none';
 }
 
-// Skanowanie kodu QR
 function scanQRCode() {
     const video = document.getElementById('qr-video');
     const canvas = document.getElementById('qr-canvas');
@@ -101,7 +91,6 @@ function scanQRCode() {
         return;
     }
     
-    // Sprawdź czy jsQR jest dostępne
     if (typeof jsQR === 'undefined') {
         console.error('jsQR nie jest załadowane');
         return;
@@ -128,7 +117,6 @@ function scanQRCode() {
     }
 }
 
-// Aktualizacja statusu QR
 function updateQRStatus(message, type = 'info') {
     const statusEl = document.getElementById('qr-status');
     if (!statusEl) return;
@@ -143,17 +131,13 @@ function updateQRStatus(message, type = 'info') {
     }
 }
 
-// Walidacja kodu QR
 async function validateQRCode(qrCode) {
     try {
-        // Zapisujemy kod QR i przechodzimy do weryfikacji twarzy
-        // Weryfikacja QR nastąpi podczas weryfikacji twarzy w endpoint /api/verify
         validatedQrCode = qrCode;
         updateQRStatus('✓ Kod QR zeskanowany. Przechodzenie do weryfikacji twarzy...', 'success');
         
         stopQRScan();
         
-        // Przejdź do kroku 2 - weryfikacja twarzy
         setTimeout(() => {
             document.getElementById('qr-scan-section').style.display = 'none';
             document.getElementById('face-verify-section').style.display = 'block';
@@ -166,7 +150,6 @@ async function validateQRCode(qrCode) {
     }
 }
 
-// Uruchomienie weryfikacji twarzy
 async function startFaceVerification() {
     try {
         faceStream = await navigator.mediaDevices.getUserMedia({ 
@@ -181,7 +164,6 @@ async function startFaceVerification() {
         
         updateStatus('Kamera gotowa. Wykrywanie twarzy...', 'info');
         
-        // Automatyczne próbkowanie (startuje sesję zbierania próbek)
         faceCaptureInterval = setInterval(captureAndVerifyFace, 800);
     } catch (error) {
         console.error('Błąd dostępu do kamery:', error);
@@ -189,7 +171,6 @@ async function startFaceVerification() {
     }
 }
 
-// Zatrzymanie weryfikacji twarzy
 function stopFaceVerification() {
     if (faceStream) {
         faceStream.getTracks().forEach(track => track.stop());
@@ -205,9 +186,7 @@ function stopFaceVerification() {
     }
 }
 
-// Automatyczne przechwytywanie i weryfikacja twarzy
 async function captureAndVerifyFace() {
-    // Zatrzymaj próbkowanie jeśli weryfikacja już została ukończona lub jest w trakcie
     if (verificationCompleted || verificationInProgress || captureSessionActive) {
         return;
     }
@@ -236,8 +215,8 @@ async function captureAndVerifyFace() {
 
         updateStatus('Ustaw twarz na środku i mrugnij (zbieranie próbek)...', 'info');
 
-        const maxFrames = 6;          // więcej próbek
-        const intervalMs = 350;       // przez ~2 sekundy
+        const maxFrames = 6;
+        const intervalMs = 350;
         const maxDurationMs = 2500;
         const startTs = Date.now();
 
@@ -260,7 +239,6 @@ async function captureAndVerifyFace() {
             !verificationInProgress
         ) {
             await grabFrame();
-            // mała przerwa na mrugnięcie / ruch
             await new Promise((r) => setTimeout(r, intervalMs));
         }
 
@@ -269,7 +247,6 @@ async function captureAndVerifyFace() {
             return;
         }
 
-        // Start weryfikacji dopiero po zebraniu próbek (żeby użytkownik zdążył)
         verificationInProgress = true;
         capturedImage = capturedImages[0];
         updateStatus('✓ Weryfikacja w toku...', 'info');
@@ -278,12 +255,11 @@ async function captureAndVerifyFace() {
         captureSessionActive = false;
     } catch (error) {
         console.error('Błąd podczas przechwytywania twarzy:', error);
-        verificationInProgress = false; // Reset w przypadku błędu
+        verificationInProgress = false;
         captureSessionActive = false;
     }
 }
 
-// Aktualizacja statusu
 function updateStatus(message, type = 'info') {
     const statusEl = document.getElementById('status');
     if (!statusEl) return;
@@ -292,7 +268,6 @@ function updateStatus(message, type = 'info') {
     statusEl.className = `status-message ${type}`;
 }
 
-// Weryfikacja dostępu
 async function verifyAccess() {
     const qrCode = validatedQrCode || document.getElementById('qr-code').value.trim();
     const resultEl = document.getElementById('result');
@@ -300,18 +275,17 @@ async function verifyAccess() {
     if (!qrCode) {
         resultEl.textContent = 'Proszę wprowadzić kod QR';
         resultEl.className = 'result-message error';
-        verificationInProgress = false; // Reset flagi
+        verificationInProgress = false;
         return;
     }
     
     if (!capturedImage && (!capturedImages || capturedImages.length === 0)) {
-        verificationInProgress = false; // Reset flagi
-        return; // Czekaj na zdjęcie
+        verificationInProgress = false;
+        return;
     }
     
     const formData = new FormData();
     formData.append('qr_code', qrCode);
-    // Wyślij wiele klatek jeśli mamy (liveness)
     if (capturedImages && capturedImages.length >= 2) {
         capturedImages.slice(0, 6).forEach((b, idx) => {
             formData.append('images', b, `frame${idx + 1}.jpg`);
@@ -331,21 +305,18 @@ async function verifyAccess() {
         
         const data = await response.json();
         
-        // Zatrzymaj automatyczne próbkowanie po weryfikacji
         if (faceCaptureInterval) {
             clearInterval(faceCaptureInterval);
             faceCaptureInterval = null;
         }
         
-        // Zatrzymaj dalsze próbkowanie po pierwszej weryfikacji
         verificationCompleted = true;
-        verificationInProgress = false; // Reset flagi po zakończeniu weryfikacji
+        verificationInProgress = false;
         
         if (data.success) {
             const userName = data.first_name && data.last_name 
                 ? `${data.first_name} ${data.last_name}` 
                 : 'Użytkowniku';
-            // Score jest danymi technicznymi – nie pokazujemy go klientowi
             resultEl.textContent = `WITAJ ${userName.toUpperCase()}! ${data.message}`;
             resultEl.className = 'result-message success';
             updateStatus('Dostęp przyznany!', 'success');
@@ -361,7 +332,6 @@ async function verifyAccess() {
             }
         }
         
-        // Reset po 5 sekundach
         setTimeout(() => {
             resetVerification();
         }, 5000);
@@ -370,34 +340,30 @@ async function verifyAccess() {
         console.error('Błąd weryfikacji:', error);
         resultEl.textContent = 'Błąd podczas weryfikacji. Spróbuj ponownie.';
         resultEl.className = 'result-message error';
-        verificationInProgress = false; // Reset flagi w przypadku błędu
-        verificationCompleted = true; // Zatrzymaj próbkowanie nawet przy błędzie
+        verificationInProgress = false;
+        verificationCompleted = true;
         captureSessionActive = false;
     }
 }
 
-// Reset weryfikacji
 function resetVerification() {
     capturedImage = null;
     capturedImages = [];
     validatedQrCode = null;
     lastQrCode = null;
-    verificationCompleted = false; // Reset flagi dla następnej weryfikacji
-    verificationInProgress = false; // Reset flagi dla następnej weryfikacji
+    verificationCompleted = false;
+    verificationInProgress = false;
     document.getElementById('qr-code').value = '';
     document.getElementById('result').textContent = '';
     document.getElementById('result').className = 'result-message';
     
-    // Wróć do kroku 1
     stopFaceVerification();
     document.getElementById('face-verify-section').style.display = 'none';
     document.getElementById('qr-scan-section').style.display = 'block';
     updateQRStatus('Gotowe do skanowania QR', 'info');
 }
 
-// Event listeners
 document.addEventListener('DOMContentLoaded', () => {
-    // Event listeners dla skanowania QR
     const startQrScanBtn = document.getElementById('start-qr-scan-btn');
     const stopQrScanBtn = document.getElementById('stop-qr-scan-btn');
     
@@ -408,7 +374,6 @@ document.addEventListener('DOMContentLoaded', () => {
         stopQrScanBtn.addEventListener('click', stopQRScan);
     }
     
-    // Ręczne wprowadzanie kodu QR
     const qrCodeInput = document.getElementById('qr-code');
     if (qrCodeInput) {
         qrCodeInput.addEventListener('keypress', (e) => {
@@ -420,7 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
         qrCodeInput.addEventListener('input', (e) => {
             if (e.target.value.trim() && e.target.value.trim() !== lastQrCode) {
                 lastQrCode = e.target.value.trim();
-                // Automatyczna walidacja po wprowadzeniu
                 setTimeout(() => {
                     if (e.target.value.trim() === lastQrCode) {
                         validateQRCode(e.target.value.trim());
@@ -430,7 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Cleanup przy zamknięciu strony
     window.addEventListener('beforeunload', () => {
         stopQRScan();
         stopFaceVerification();

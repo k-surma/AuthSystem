@@ -1,28 +1,20 @@
-"""
-Skrypt pomocniczy do inicjalizacji przykładowych danych testowych
-Uruchom: python test_setup.py
-"""
 from database import SessionLocal, init_db, User, Badge
 from datetime import date, timedelta
 import random
 import string
 
 def generate_random_string(length=10):
-    """Generuje losowy string"""
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 def setup_test_data():
-    """Tworzy przykładowe dane testowe"""
     init_db()
     db = SessionLocal()
     
     try:
-        # Sprawdź czy już istnieją dane
         if db.query(User).count() > 0:
             print("Baza danych już zawiera dane. Pomijam tworzenie przykładowych danych.")
             return
         
-        # Tworzenie przykładowych użytkowników
         users_data = [
             {"first_name": "Jan", "last_name": "Kowalski", "face_id": "JAN_KOWALSKI_001"},
             {"first_name": "Anna", "last_name": "Nowak", "face_id": "ANNA_NOWAK_002"},
@@ -42,12 +34,11 @@ def setup_test_data():
         
         db.commit()
         
-        # Tworzenie przepustek dla użytkowników
         for user in users:
             qr_code = f"QR_{user.face_id}_{generate_random_string(8)}"
             badge = Badge(
                 qr_code=qr_code,
-                valid_until=date.today() + timedelta(days=365),  # Ważna przez rok
+                valid_until=date.today() + timedelta(days=365),
                 user_id=user.id
             )
             db.add(badge)
