@@ -138,39 +138,76 @@ async def verify_access(
     Weryfikacja dostępu - skanowanie QR i rozpoznawanie twarzy
     """
     try:
-        # 1. Sprawdź czy kod QR istnieje w bazie
+        # 1. Zapisz zdjęcie (dla każdej próby, także nieudanej)
+        timestamp = datetime.now()
+        timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
+        image_filename = f"{timestamp_str}_{qr_code}.jpg"
+        image_path = os.path.join(UPLOAD_DIR, image_filename)
+
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+
+        # 2. Sprawdź czy kod QR istnieje w bazie
         badge = db.query(Badge).filter(Badge.qr_code == qr_code).first()
         if not badge:
+            log = AccessLog(
+                timestamp=timestamp,
+                result="REJECT",
+                match_score=0.0,
+                badge_id=None,
+                user_id=None,
+                image_path=image_path,
+            )
+            db.add(log)
+            db.commit()
+
             return VerificationResponse(
                 success=False,
                 message="Nieprawidłowy kod QR",
-                result="REJECT"
+                result="REJECT",
+                log_id=log.id,
             )
         
-        # 2. Sprawdź czy badge jest ważny
+        # 3. Sprawdź czy badge jest ważny
         if badge.valid_until and badge.valid_until < date.today():
+            log = AccessLog(
+                timestamp=timestamp,
+                result="REJECT",
+                match_score=0.0,
+                badge_id=badge.id,
+                user_id=badge.user_id,
+                image_path=image_path,
+            )
+            db.add(log)
+            db.commit()
+
             return VerificationResponse(
                 success=False,
                 message="Przepustka wygasła",
-                result="REJECT"
+                result="REJECT",
+                log_id=log.id,
             )
         
-        # 3. Sprawdź czy użytkownik jest aktywny
+        # 4. Sprawdź czy użytkownik jest aktywny
         user = db.query(User).filter(User.id == badge.user_id).first()
         if not user or not user.is_active:
+            log = AccessLog(
+                timestamp=timestamp,
+                result="REJECT",
+                match_score=0.0,
+                badge_id=badge.id,
+                user_id=user.id if user else None,
+                image_path=image_path,
+            )
+            db.add(log)
+            db.commit()
+
             return VerificationResponse(
                 success=False,
                 message="Użytkownik nieaktywny",
-                result="REJECT"
+                result="REJECT",
+                log_id=log.id,
             )
-        
-        # 4. Zapisz zdjęcie
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        image_filename = f"{timestamp}_{user.id}.jpg"
-        image_path = os.path.join(UPLOAD_DIR, image_filename)
-        
-        with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
         
         # 5. Rozpoznaj twarz
         face_result = face_service.recognize_face(image_path, threshold=0.6)
@@ -178,7 +215,7 @@ async def verify_access(
         if not face_result:
             # Nie wykryto twarzy lub nie rozpoznano
             log = AccessLog(
-                timestamp=datetime.now(),
+                timestamp=timestamp,
                 result="REJECT",
                 match_score=0.0,
                 badge_id=badge.id,
@@ -201,7 +238,7 @@ async def verify_access(
         if recognized_face_id != user.face_id:
             # Podejrzana sytuacja - ktoś używa cudzej karty
             log = AccessLog(
-                timestamp=datetime.now(),
+                timestamp=timestamp,
                 result="SUSPICIOUS",
                 match_score=match_score,
                 badge_id=badge.id,
@@ -223,7 +260,7 @@ async def verify_access(
         # 7. Weryfikacja pomyślna
         if match_score >= 0.6:
             log = AccessLog(
-                timestamp=datetime.now(),
+                timestamp=timestamp,
                 result="ACCEPT",
                 match_score=match_score,
                 badge_id=badge.id,
@@ -245,7 +282,7 @@ async def verify_access(
             )
         else:
             log = AccessLog(
-                timestamp=datetime.now(),
+                timestamp=timestamp,
                 result="REJECT",
                 match_score=match_score,
                 badge_id=badge.id,

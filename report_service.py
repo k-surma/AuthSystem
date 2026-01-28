@@ -1,6 +1,6 @@
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from datetime import datetime, timedelta
@@ -12,6 +12,17 @@ class ReportService:
         self.reports_dir = reports_dir
         os.makedirs(reports_dir, exist_ok=True)
     
+    @staticmethod
+    def _strip_pl_accents(text: str) -> str:
+        """Usuwa polskie znaki diakrytyczne z tekstu (prosta transliteracja)."""
+        if not isinstance(text, str):
+            return text
+        mapping = str.maketrans(
+            "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
+            "acelnoszzACELNOSZZ",
+        )
+        return text.translate(mapping)
+
     def generate_access_report(self, logs: List[dict], start_date: datetime = None, end_date: datetime = None) -> str:
         """
         Generuje raport PDF z logami dostępu
@@ -37,12 +48,14 @@ class ReportService:
             spaceAfter=30,
         )
         
-        # Tytuł
-        title = Paragraph("Raport Dostępu - System Weryfikacji Tożsamości", title_style)
+        # Tytuł (bez polskich znakow)
+        title_text = "Raport Dostepu - System Weryfikacji Tozsamosci"
+        title = Paragraph(title_text, title_style)
         elements.append(title)
         
         # Informacje o okresie
         period_text = f"Okres: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+        period_text = self._strip_pl_accents(period_text)
         period = Paragraph(period_text, styles['Normal'])
         elements.append(period)
         elements.append(Spacer(1, 0.2*inch))
@@ -54,11 +67,11 @@ class ReportService:
         suspicious = sum(1 for log in logs if log.get('result') == 'SUSPICIOUS')
         
         stats_data = [
-            ['Statystyki', ''],
-            ['Łączna liczba zdarzeń', str(total_logs)],
-            ['Zaakceptowane', str(accepted)],
-            ['Odrzucone', str(rejected)],
-            ['Podejrzane', str(suspicious)],
+            [self._strip_pl_accents('Statystyki'), ''],
+            [self._strip_pl_accents('Laczna liczba zdarzen'), str(total_logs)],
+            [self._strip_pl_accents('Zaakceptowane'), str(accepted)],
+            [self._strip_pl_accents('Odrzucone'), str(rejected)],
+            [self._strip_pl_accents('Podejrzane'), str(suspicious)],
         ]
         
         stats_table = Table(stats_data, colWidths=[3*inch, 2*inch])
@@ -75,7 +88,7 @@ class ReportService:
         elements.append(stats_table)
         elements.append(Spacer(1, 0.3*inch))
         
-        # Tabela logów
+        # Tabela logow
         if logs:
             table_data = [['Data/Czas', 'Wynik', 'Score', 'User ID', 'Badge ID']]
             
@@ -86,7 +99,7 @@ class ReportService:
                 
                 table_data.append([
                     str(timestamp),
-                    log.get('result', ''),
+                    self._strip_pl_accents(log.get('result', '')),
                     f"{log.get('match_score', 0):.2f}" if log.get('match_score') else '-',
                     str(log.get('user_id', '-')),
                     str(log.get('badge_id', '-'))
@@ -105,6 +118,55 @@ class ReportService:
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
             ]))
             elements.append(table)
+
+            # Sekcja ze zdjeciami nieudanych prob dostepu
+            failed_logs = [
+                log for log in logs
+                if log.get('result') in ('REJECT', 'SUSPICIOUS')
+                and log.get('image_path')
+            ]
+
+            if failed_logs:
+                elements.append(Spacer(1, 0.4 * inch))
+                failed_title_text = "Nieudane proby dostepu (REJECT / SUSPICIOUS) ze zdjeciami"
+                failed_title = Paragraph(
+                    failed_title_text,
+                    styles['Heading2'],
+                )
+                elements.append(failed_title)
+                elements.append(Spacer(1, 0.2 * inch))
+
+                for log in failed_logs:
+                    img_path = log.get('image_path')
+                    img_loaded = False
+                    if img_path:
+                        try:
+                            img = RLImage(img_path, width=2.0 * inch, height=2.0 * inch)
+                            elements.append(img)
+                            img_loaded = True
+                        except Exception:
+                            # Pokaż informację, że nie udało się wczytać konkretnego obrazu
+                            info_text = f"Nie udalo sie wczytac obrazu: {img_path}"
+                            info = Paragraph(info_text, styles['Italic'])
+                            elements.append(info)
+
+                    ts = log.get('timestamp')
+                    if isinstance(ts, datetime):
+                        ts_str = ts.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        ts_str = str(ts)
+
+                    caption_text = (
+                        f"Data/Czas: {ts_str}<br/>"
+                        f"Wynik: {self._strip_pl_accents(log.get('result', ''))}<br/>"
+                        f"Score: {log.get('match_score', '-') if log.get('match_score') is not None else '-'}<br/>"
+                        f"User ID: {log.get('user_id', '-')}, "
+                        f"Badge ID: {log.get('badge_id', '-')}<br/>"
+                        f"Sciezka obrazu: {img_path or '-'}"
+                    )
+                    caption = Paragraph(caption_text, styles['Normal'])
+                    elements.append(caption)
+                    elements.append(Spacer(1, 0.2 * inch))
         else:
             no_data = Paragraph("Brak danych w wybranym okresie", styles['Normal'])
             elements.append(no_data)

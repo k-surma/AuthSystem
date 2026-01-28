@@ -25,11 +25,33 @@ class FaceRecognitionService:
                     self.known_face_ids[face_id] = face_id
     
     def save_encoding(self, face_id: str, encoding):
-        """Zapisuje encoding twarzy"""
+        """Zapisuje encoding twarzy.
+
+        Od teraz dla kazdego face_id przechowujemy liste encodings,
+        co pozwala np. zarejestrowac twarz w okularach i bez okularow,
+        a przy rozpoznawaniu porownywac do obu wariantow.
+        """
         filepath = os.path.join(self.encodings_dir, f"{face_id}.pkl")
+
+        # Jesli istnieje juz plik, dolacz encoding do listy (multi‑sample)
+        existing_encodings = []
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'rb') as f:
+                    loaded = pickle.load(f)
+                    if isinstance(loaded, list):
+                        existing_encodings = loaded
+                    else:
+                        existing_encodings = [loaded]
+            except Exception:
+                existing_encodings = []
+
+        all_encodings = existing_encodings + [encoding]
+
         with open(filepath, 'wb') as f:
-            pickle.dump(encoding, f)
-        self.known_encodings[face_id] = encoding
+            pickle.dump(all_encodings, f)
+
+        self.known_encodings[face_id] = all_encodings
         self.known_face_ids[face_id] = face_id
     
     def register_face(self, image_path: str, face_id: str) -> bool:
@@ -40,13 +62,14 @@ class FaceRecognitionService:
                 return False
                 
             image = face_recognition.load_image_file(image_path)
-            encodings = face_recognition.face_encodings(image)
+            # Uzyj modelu 'large' dla bardziej stabilnych cech
+            encodings = face_recognition.face_encodings(image, model="large")
             
             if len(encodings) == 0:
                 print("Nie wykryto twarzy na zdjęciu")
                 return False
             
-            # Użyj pierwszego znalezionego encoding
+            # Uzyj pierwszego znalezionego encoding
             encoding = encodings[0]
             self.save_encoding(face_id, encoding)
             return True
@@ -61,7 +84,8 @@ class FaceRecognitionService:
         """
         try:
             unknown_image = face_recognition.load_image_file(image_path)
-            unknown_encodings = face_recognition.face_encodings(unknown_image)
+            # 'large' lepiej radzi sobie z roznymi wariantami twarzy (np. z okularami / bez)
+            unknown_encodings = face_recognition.face_encodings(unknown_image, model="large")
             
             if len(unknown_encodings) == 0:
                 return None
@@ -72,7 +96,13 @@ class FaceRecognitionService:
             best_distance = float('inf')
             
             for face_id, known_encoding in self.known_encodings.items():
-                distance = face_recognition.face_distance([known_encoding], unknown_encoding)[0]
+                # known_encoding moze byc pojedynczym wektorem lub lista wektorow
+                if isinstance(known_encoding, list):
+                    distances = face_recognition.face_distance(known_encoding, unknown_encoding)
+                    distance = float(np.min(distances))
+                else:
+                    distance = face_recognition.face_distance([known_encoding], unknown_encoding)[0]
+
                 if distance < best_distance:
                     best_distance = distance
                     best_match = face_id
@@ -80,7 +110,10 @@ class FaceRecognitionService:
             # Konwersja distance na score (0-1, gdzie 1 to najlepsze dopasowanie)
             match_score = 1.0 - best_distance
             
-            if match_score >= threshold:
+            # Nieco obnizony prog, aby lepiej akceptowac naturalne roznice (okulary / bez)
+            effective_threshold = threshold * 0.95
+            
+            if match_score >= effective_threshold:
                 return (best_match, match_score)
             else:
                 return None
