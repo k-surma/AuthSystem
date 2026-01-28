@@ -131,31 +131,73 @@ async def check_auth(credentials: Optional[HTTPAuthorizationCredentials] = Depen
 @app.post("/api/verify", response_model=VerificationResponse)
 async def verify_access(
     qr_code: str = Form(...),
-    image: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None),
+    images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db)
 ):
     """
     Weryfikacja dostępu - skanowanie QR i rozpoznawanie twarzy
     """
     try:
-        # 1. Zapisz zdjęcie (dla każdej próby, także nieudanej)
+        # 1. Zapisz zdjęcie/zdjęcia (dla każdej próby, także nieudanej)
         timestamp = datetime.now()
         timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
-        image_filename = f"{timestamp_str}_{qr_code}.jpg"
-        image_path = os.path.join(UPLOAD_DIR, image_filename)
+        image_paths: List[str] = []
 
-        with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
+        # Preferujemy "images[]" (multi-frame) jeśli przyszło
+        if images:
+            for idx, up in enumerate(images[:3]):  # ograniczenie na wszelki wypadek
+                fn = f"{timestamp_str}_{qr_code}_{idx}.jpg"
+                p = os.path.join(UPLOAD_DIR, fn)
+                with open(p, "wb") as buffer:
+                    shutil.copyfileobj(up.file, buffer)
+                image_paths.append(p)
+        elif image is not None:
+            image_filename = f"{timestamp_str}_{qr_code}.jpg"
+            image_path = os.path.join(UPLOAD_DIR, image_filename)
+
+            with open(image_path, "wb") as buffer:
+                shutil.copyfileobj(image.file, buffer)
+            image_paths.append(image_path)
+        else:
+            raise HTTPException(status_code=400, detail="Brak zdjęcia do weryfikacji")
+
+        primary_image_path = image_paths[0]
+
+        # 1b. Liveness (mrugnięcie) – jeśli dostaliśmy kilka klatek z kamery
+        liveness_ok = False
+        if len(image_paths) >= 3:
+            # bierzemy do 6 klatek (frontend wysyła kilka)
+            liveness_ok = face_service.detect_blink_liveness(image_paths[:6])
+            if not liveness_ok:
+                log = AccessLog(
+                    timestamp=timestamp,
+                    result="SUSPICIOUS",
+                    match_score=None,
+                    badge_id=None,
+                    user_id=None,
+                    image_path=primary_image_path,
+                )
+                db.add(log)
+                db.commit()
+
+                return VerificationResponse(
+                    success=False,
+                    message="Brak potwierdzenia liveness (mrugnięcie) – możliwe zdjęcie/ekran",
+                    result="SUSPICIOUS",
+                    log_id=log.id,
+                )
 
         # 2. Prosta detekcja spoofingu (telefon / ekran ze zdjęciem)
-        if face_service.detect_screen_spoof(image_path):
+        # Jeśli liveness przeszło, nie blokujemy już heurystyką "ekran" (unikamy fałszywych alarmów).
+        if (not liveness_ok) and face_service.detect_screen_spoof(primary_image_path):
             log = AccessLog(
                 timestamp=timestamp,
                 result="SUSPICIOUS",
-                match_score=0.0,
+                match_score=None,
                 badge_id=None,
                 user_id=None,
-                image_path=image_path,
+                image_path=primary_image_path,
             )
             db.add(log)
             db.commit()
@@ -173,10 +215,10 @@ async def verify_access(
             log = AccessLog(
                 timestamp=timestamp,
                 result="REJECT",
-                match_score=0.0,
+                match_score=None,
                 badge_id=None,
                 user_id=None,
-                image_path=image_path,
+                image_path=primary_image_path,
             )
             db.add(log)
             db.commit()
@@ -193,10 +235,10 @@ async def verify_access(
             log = AccessLog(
                 timestamp=timestamp,
                 result="REJECT",
-                match_score=0.0,
+                match_score=None,
                 badge_id=badge.id,
                 user_id=badge.user_id,
-                image_path=image_path,
+                image_path=primary_image_path,
             )
             db.add(log)
             db.commit()
@@ -214,10 +256,10 @@ async def verify_access(
             log = AccessLog(
                 timestamp=timestamp,
                 result="REJECT",
-                match_score=0.0,
+                match_score=None,
                 badge_id=badge.id,
                 user_id=user.id if user else None,
-                image_path=image_path,
+                image_path=primary_image_path,
             )
             db.add(log)
             db.commit()
@@ -230,17 +272,18 @@ async def verify_access(
             )
         
         # 5. Rozpoznaj twarz
-        face_result = face_service.recognize_face(image_path, threshold=0.6)
+        # Obniżony threshold z 0.6 do 0.5 dla lepszej tolerancji na zmiany oświetlenia/pozycji
+        face_result = face_service.recognize_face(primary_image_path, threshold=0.5)
         
         if not face_result:
             # Nie wykryto twarzy lub nie rozpoznano
             log = AccessLog(
                 timestamp=timestamp,
                 result="REJECT",
-                match_score=0.0,
+                match_score=None,
                 badge_id=badge.id,
                 user_id=user.id,
-                image_path=image_path
+                image_path=primary_image_path
             )
             db.add(log)
             db.commit()
@@ -263,7 +306,7 @@ async def verify_access(
                 match_score=match_score,
                 badge_id=badge.id,
                 user_id=user.id,
-                image_path=image_path
+                image_path=primary_image_path
             )
             db.add(log)
             db.commit()
@@ -278,14 +321,15 @@ async def verify_access(
             )
         
         # 7. Weryfikacja pomyślna
-        if match_score >= 0.6:
+        # Obniżony próg z 0.6 do 0.5 dla lepszej tolerancji
+        if match_score >= 0.5:
             log = AccessLog(
                 timestamp=timestamp,
                 result="ACCEPT",
                 match_score=match_score,
                 badge_id=badge.id,
                 user_id=user.id,
-                image_path=image_path
+                image_path=primary_image_path
             )
             db.add(log)
             db.commit()
@@ -307,7 +351,7 @@ async def verify_access(
                 match_score=match_score,
                 badge_id=badge.id,
                 user_id=user.id,
-                image_path=image_path
+                image_path=primary_image_path
             )
             db.add(log)
             db.commit()
@@ -327,10 +371,19 @@ async def verify_access(
 @app.post("/api/users", response_model=UserResponse)
 async def create_user(user: UserCreate, db: Session = Depends(get_db)):
     """Tworzenie nowego użytkownika"""
+    # Automatyczne generowanie face_id jeśli nie podano
+    if not user.face_id or user.face_id.strip() == "":
+        # Generuj face_id na podstawie imienia i nazwiska + timestamp
+        import time
+        base_id = f"{user.first_name.upper()}_{user.last_name.upper()}"
+        face_id = f"{base_id}_{int(time.time())}"
+    else:
+        face_id = user.face_id
+    
     db_user = User(
         first_name=user.first_name,
         last_name=user.last_name,
-        face_id=user.face_id,
+        face_id=face_id,
         is_active=user.is_active
     )
     db.add(db_user)
@@ -502,5 +555,7 @@ async def generate_report(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
 
 

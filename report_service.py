@@ -100,7 +100,7 @@ class ReportService:
                 table_data.append([
                     str(timestamp),
                     self._strip_pl_accents(log.get('result', '')),
-                    f"{log.get('match_score', 0):.2f}" if log.get('match_score') else '-',
+                    f"{log.get('match_score'):.2f}" if log.get('match_score') is not None else '-',
                     str(log.get('user_id', '-')),
                     str(log.get('badge_id', '-'))
                 ])
@@ -174,5 +174,7 @@ class ReportService:
         # Generuj PDF
         doc.build(elements)
         return filepath
+
+
 
 

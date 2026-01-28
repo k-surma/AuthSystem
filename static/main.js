@@ -7,6 +7,8 @@ let validatedQrCode = null;
 let lastQrCode = null;
 let verificationCompleted = false; // Flaga zapobiegająca dalszemu próbkowaniu po weryfikacji
 let verificationInProgress = false; // Flaga zapobiegająca równoległym wywołaniom weryfikacji
+let capturedImages = []; // 2 klatki do liveness (mrugnięcie)
+let captureSessionActive = false; // zbieranie wielu próbek do liveness
 
 // Uruchomienie skanowania QR
 async function startQRScan() {
@@ -179,8 +181,8 @@ async function startFaceVerification() {
         
         updateStatus('Kamera gotowa. Wykrywanie twarzy...', 'info');
         
-        // Automatyczne próbkowanie kilka razy na sekundę
-        faceCaptureInterval = setInterval(captureAndVerifyFace, 500); // 2 razy na sekundę
+        // Automatyczne próbkowanie (startuje sesję zbierania próbek)
+        faceCaptureInterval = setInterval(captureAndVerifyFace, 800);
     } catch (error) {
         console.error('Błąd dostępu do kamery:', error);
         updateStatus('Błąd: Nie można uzyskać dostępu do kamery', 'error');
@@ -206,7 +208,7 @@ function stopFaceVerification() {
 // Automatyczne przechwytywanie i weryfikacja twarzy
 async function captureAndVerifyFace() {
     // Zatrzymaj próbkowanie jeśli weryfikacja już została ukończona lub jest w trakcie
-    if (verificationCompleted || verificationInProgress) {
+    if (verificationCompleted || verificationInProgress || captureSessionActive) {
         return;
     }
     
@@ -229,23 +231,55 @@ async function captureAndVerifyFace() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const context = canvas.getContext('2d');
-        context.drawImage(video, 0, 0);
-        
-        // Konwertuj canvas na blob
-        canvas.toBlob(async (blob) => {
-            if (blob && blob.size > 0 && !verificationCompleted && !verificationInProgress) {
-                // Ustaw flagę przed rozpoczęciem weryfikacji
-                verificationInProgress = true;
-                capturedImage = blob;
-                updateStatus('✓ Twarz wykryta. Weryfikacja w toku...', 'info');
-                
-                // Automatyczna weryfikacja
-                await verifyAccess();
-            }
-        }, 'image/jpeg', 0.95);
+        captureSessionActive = true;
+        capturedImages = [];
+
+        updateStatus('Ustaw twarz na środku i mrugnij (zbieranie próbek)...', 'info');
+
+        const maxFrames = 6;          // więcej próbek
+        const intervalMs = 350;       // przez ~2 sekundy
+        const maxDurationMs = 2500;
+        const startTs = Date.now();
+
+        const grabFrame = async () => {
+            if (verificationCompleted || verificationInProgress) return;
+
+            context.drawImage(video, 0, 0);
+            await new Promise((resolve) => {
+                canvas.toBlob((blob) => {
+                    if (blob && blob.size > 0) capturedImages.push(blob);
+                    resolve();
+                }, 'image/jpeg', 0.95);
+            });
+        };
+
+        while (
+            capturedImages.length < maxFrames &&
+            (Date.now() - startTs) < maxDurationMs &&
+            !verificationCompleted &&
+            !verificationInProgress
+        ) {
+            await grabFrame();
+            // mała przerwa na mrugnięcie / ruch
+            await new Promise((r) => setTimeout(r, intervalMs));
+        }
+
+        if (capturedImages.length === 0) {
+            captureSessionActive = false;
+            return;
+        }
+
+        // Start weryfikacji dopiero po zebraniu próbek (żeby użytkownik zdążył)
+        verificationInProgress = true;
+        capturedImage = capturedImages[0];
+        updateStatus('✓ Weryfikacja w toku...', 'info');
+
+        await verifyAccess();
+        captureSessionActive = false;
     } catch (error) {
         console.error('Błąd podczas przechwytywania twarzy:', error);
         verificationInProgress = false; // Reset w przypadku błędu
+        captureSessionActive = false;
     }
 }
 
@@ -270,14 +304,21 @@ async function verifyAccess() {
         return;
     }
     
-    if (!capturedImage) {
+    if (!capturedImage && (!capturedImages || capturedImages.length === 0)) {
         verificationInProgress = false; // Reset flagi
         return; // Czekaj na zdjęcie
     }
     
     const formData = new FormData();
     formData.append('qr_code', qrCode);
-    formData.append('image', capturedImage, 'photo.jpg');
+    // Wyślij wiele klatek jeśli mamy (liveness)
+    if (capturedImages && capturedImages.length >= 2) {
+        capturedImages.slice(0, 6).forEach((b, idx) => {
+            formData.append('images', b, `frame${idx + 1}.jpg`);
+        });
+    } else {
+        formData.append('image', capturedImage, 'photo.jpg');
+    }
     
     resultEl.textContent = 'Weryfikacja w toku...';
     resultEl.className = 'result-message';
@@ -304,7 +345,8 @@ async function verifyAccess() {
             const userName = data.first_name && data.last_name 
                 ? `${data.first_name} ${data.last_name}` 
                 : 'Użytkowniku';
-            resultEl.textContent = `WITAJ ${userName.toUpperCase()}! ${data.message} (Score: ${(data.match_score * 100).toFixed(1)}%)`;
+            // Score jest danymi technicznymi – nie pokazujemy go klientowi
+            resultEl.textContent = `WITAJ ${userName.toUpperCase()}! ${data.message}`;
             resultEl.className = 'result-message success';
             updateStatus('Dostęp przyznany!', 'success');
         } else {
@@ -330,12 +372,14 @@ async function verifyAccess() {
         resultEl.className = 'result-message error';
         verificationInProgress = false; // Reset flagi w przypadku błędu
         verificationCompleted = true; // Zatrzymaj próbkowanie nawet przy błędzie
+        captureSessionActive = false;
     }
 }
 
 // Reset weryfikacji
 function resetVerification() {
     capturedImage = null;
+    capturedImages = [];
     validatedQrCode = null;
     lastQrCode = null;
     verificationCompleted = false; // Reset flagi dla następnej weryfikacji
@@ -392,3 +436,5 @@ document.addEventListener('DOMContentLoaded', () => {
         stopFaceVerification();
     });
 });
+
+

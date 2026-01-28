@@ -100,7 +100,7 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
     const userData = {
         first_name: document.getElementById('first-name').value,
         last_name: document.getElementById('last-name').value,
-        face_id: document.getElementById('face-id').value,
+        // face_id nie jest już wymagane - zostanie wygenerowane automatycznie przez backend
         is_active: document.getElementById('is-active').checked
     };
     
@@ -388,7 +388,7 @@ async function loadLogs() {
                     <br>
                     <small>User ID: ${log.user_id || '-'} | Badge ID: ${log.badge_id || '-'}</small>
                     <br>
-                    <small>Match Score: ${log.match_score ? (log.match_score * 100).toFixed(1) + '%' : '-'}</small>
+                    <small>Match Score: ${log.match_score !== null && log.match_score !== undefined ? (log.match_score * 100).toFixed(1) + '%' : '-'}</small>
                 </div>
             `;
             logsList.appendChild(card);
@@ -520,6 +520,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('beforeunload', () => {
     stopAdminCamera();
 });
+
+
 
 
 

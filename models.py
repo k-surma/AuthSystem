@@ -6,7 +6,7 @@ from typing import Optional
 class UserCreate(BaseModel):
     first_name: str
     last_name: str
-    face_id: str
+    face_id: Optional[str] = None  # Opcjonalne - jeśli nie podano, zostanie wygenerowane automatycznie
     is_active: bool = True
 
 
@@ -64,5 +64,7 @@ class VerificationResponse(BaseModel):
     log_id: Optional[int] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+
+
 
 

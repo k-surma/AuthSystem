@@ -33,3 +33,5 @@ class QRService:
         return len(qr_code) > 0 and len(qr_code) < 1000
 
 
+
+
