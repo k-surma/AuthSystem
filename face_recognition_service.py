@@ -132,3 +132,64 @@ class FaceRecognitionService:
             print(f"Błąd podczas wykrywania twarzy: {e}")
             return False
 
+    def detect_screen_spoof(self, image_path: str) -> bool:
+        """
+        Prosta heurystyka anty‑spoofingowa:
+        próbuje wykryć duży, jasny, prostokątny obszar przypominający ekran telefonu.
+        Zwraca True, jeśli obraz wygląda podejrzanie (możliwy ekran / zdjęcie).
+        """
+        try:
+            img = cv2.imread(image_path)
+            if img is None:
+                return False
+
+            h, w = img.shape[:2]
+            # Zmniejsz obraz dla szybszego przetwarzania
+            scale = 600.0 / max(h, w)
+            if scale < 1.0:
+                img = cv2.resize(img, (int(w * scale), int(h * scale)))
+
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+            # Wykryj krawędzie
+            edges = cv2.Canny(blur, 50, 150)
+
+            # Znajdź kontury (kandydaci na prostokąt ekranu)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            img_area = img.shape[0] * img.shape[1]
+            suspect_rectangles = 0
+
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                # Interesują nas tylko dość duże obszary
+                if area < 0.15 * img_area:
+                    continue
+
+                peri = cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+
+                # Prostokąt = 4 wierzchołki
+                if len(approx) == 4:
+                    x, y, w_box, h_box = cv2.boundingRect(approx)
+                    aspect = w_box / float(h_box)
+
+                    # Typowe proporcje telefonu (portret/landscape) i nie za bardzo kwadratowe
+                    if 0.3 < aspect < 3.5:
+                        # Sprawdź jasność i równomierność wewnątrz tego prostokąta
+                        roi = gray[y : y + h_box, x : x + w_box]
+                        mean_intensity = float(np.mean(roi))
+                        std_intensity = float(np.std(roi))
+
+                        # Ekran telefonu: zwykle dosyć jasny i dość jednorodny
+                        if mean_intensity > 120 and std_intensity < 40:
+                            suspect_rectangles += 1
+
+            # Jeśli znaleźliśmy co najmniej jeden „ekranopodobny” prostokąt – oznacz jako podejrzane
+            return suspect_rectangles > 0
+
+        except Exception as e:
+            print(f"Błąd podczas detekcji spoofingu: {e}")
+            return False
+

@@ -147,7 +147,27 @@ async def verify_access(
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
 
-        # 2. Sprawdź czy kod QR istnieje w bazie
+        # 2. Prosta detekcja spoofingu (telefon / ekran ze zdjęciem)
+        if face_service.detect_screen_spoof(image_path):
+            log = AccessLog(
+                timestamp=timestamp,
+                result="SUSPICIOUS",
+                match_score=0.0,
+                badge_id=None,
+                user_id=None,
+                image_path=image_path,
+            )
+            db.add(log)
+            db.commit()
+
+            return VerificationResponse(
+                success=False,
+                message="Podejrzenie uzycia zdjecia lub ekranu (telefon, monitor)",
+                result="SUSPICIOUS",
+                log_id=log.id,
+            )
+
+        # 3. Sprawdź czy kod QR istnieje w bazie
         badge = db.query(Badge).filter(Badge.qr_code == qr_code).first()
         if not badge:
             log = AccessLog(
