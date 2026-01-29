@@ -133,8 +133,31 @@ function updateQRStatus(message, type = 'info') {
 
 async function validateQRCode(qrCode) {
     try {
-        validatedQrCode = qrCode;
-        updateQRStatus('✓ Kod QR zeskanowany. Przechodzenie do weryfikacji twarzy...', 'success');
+        if (!qrCode || !qrCode.trim()) {
+            updateQRStatus('Proszę zeskanować lub wprowadzić kod QR', 'error');
+            return;
+        }
+
+        const trimmed = qrCode.trim();
+
+        // Najpierw sprawdź po stronie backendu, czy kod istnieje i jest ważny
+        const resp = await fetch(`/api/check-qr?qr_code=${encodeURIComponent(trimmed)}`);
+        if (!resp.ok) {
+            throw new Error('Błąd odpowiedzi serwera');
+        }
+        const data = await resp.json();
+
+        if (!data.valid) {
+            // Zły / obcy / wygasły kod – nie przechodzimy do weryfikacji twarzy
+            validatedQrCode = null;
+            // Komunikat jasno mówi, że kod nie pasuje do tego, co mamy w bazie
+            updateQRStatus(data.message || '✗ Kod QR niezgodny z bazą', 'error');
+            return;
+        }
+
+        // Kod poprawny – dopiero teraz przechodzimy do twarzy
+        validatedQrCode = trimmed;
+        updateQRStatus('✓ Kod QR prawidłowy. Przechodzenie do weryfikacji twarzy...', 'success');
         
         stopQRScan();
         
@@ -146,6 +169,7 @@ async function validateQRCode(qrCode) {
         
     } catch (error) {
         console.error('Błąd walidacji QR:', error);
+        validatedQrCode = null;
         updateQRStatus('Błąd podczas sprawdzania kodu QR', 'error');
     }
 }
@@ -398,6 +422,9 @@ document.addEventListener('DOMContentLoaded', () => {
         stopQRScan();
         stopFaceVerification();
     });
+
+    // Ułatwia sprawdzenie, czy przeglądarka na pewno wczytała nową wersję pliku
+    updateQRStatus('Gotowe do skanowania QR (wersja: qrjwt1)', 'info');
 });
 
 

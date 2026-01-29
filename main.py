@@ -110,13 +110,37 @@ async def check_auth(credentials: Optional[HTTPAuthorizationCredentials] = Depen
     return {"authenticated": False}
 
 
+@app.get("/api/check-qr")
+async def check_qr_code(qr_code: str, db: Session = Depends(get_db)):
+    """
+    Proste sprawdzenie kodu QR, używane przed przejściem do weryfikacji twarzy.
+    Tutaj sprawdzamy tylko, czy podany ciąg znaków istnieje jako qr_code w tabeli Badge
+    i czy przepustka / użytkownik są nadal ważni.
+    """
+    if not qr_code or not QRService.validate_qr_code(qr_code):
+        return {"valid": False, "message": "Kod QR niezgodny z bazą"}
+
+    badge = db.query(Badge).filter(Badge.qr_code == qr_code).first()
+    if not badge:
+        return {"valid": False, "message": "Kod QR niezgodny z bazą"}
+
+    if badge.valid_until and badge.valid_until < date.today():
+        return {"valid": False, "message": "Kod QR niezgodny z bazą"}
+
+    user = db.query(User).filter(User.id == badge.user_id).first()
+    if not user or not user.is_active:
+        return {"valid": False, "message": "Kod QR niezgodny z bazą"}
+
+    return {"valid": True, "message": "Kod QR jest prawidłowy"}
+
+
 @app.post("/api/verify", response_model=VerificationResponse)
 async def verify_access(
     qr_code: str = Form(...),
     image: Optional[UploadFile] = File(None),
     images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db)
-):
+    ):
     try:
         timestamp = datetime.now()
         timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
@@ -174,7 +198,7 @@ async def verify_access(
             )
             db.add(log)
             db.commit()
-
+        
             return VerificationResponse(
                 success=False,
                 message="Podejrzenie uzycia zdjecia lub ekranu (telefon, monitor)",
@@ -182,6 +206,7 @@ async def verify_access(
                 log_id=log.id,
             )
 
+        # W tym miejscu upewniamy się, że kod QR istnieje w naszej bazie (tabela Badge)
         badge = db.query(Badge).filter(Badge.qr_code == qr_code).first()
         if not badge:
             log = AccessLog(
@@ -415,6 +440,7 @@ async def get_badge_qr(badge_id: int, db: Session = Depends(get_db)):
     if not badge:
         raise HTTPException(status_code=404, detail="Przepustka nie znaleziona")
     
+    # Generujemy obraz QR na podstawie qr_code zapisanego w bazie
     qr_image = qr_service.generate_qr_code(badge.qr_code)
     return {"qr_code": badge.qr_code, "qr_image": qr_image}
 
