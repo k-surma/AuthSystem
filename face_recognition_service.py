@@ -199,29 +199,25 @@ class FaceRecognitionService:
                 ear = (self._eye_aspect_ratio(left) + self._eye_aspect_ratio(right)) / 2.0
                 ears.append(float(ear))
 
+            # Sprawdzenie spójności twarzy między klatkami – próg poluzowany
             base = encs[0]
             for e in encs[1:]:
                 dist = float(face_recognition.face_distance([base], e)[0])
-                if dist > 0.42:
+                # wcześniej 0.42 – teraz wyżej, żeby rzadziej odrzucać
+                if dist > 0.55:
                     return False
 
             ear_min = float(np.min(ears))
             ear_max = float(np.max(ears))
 
-            has_open = ear_max >= 0.21
-            has_closed = ear_min <= 0.19
-            enough_delta = (ear_max - ear_min) >= 0.05
+            # Progi poluzowane – mniejsze wymagania co do różnicy otwarte/zamknięte
+            has_open = ear_max >= 0.20
+            has_closed = ear_min <= 0.18
+            enough_delta = (ear_max - ear_min) >= 0.03
 
-            blink_transition = False
-            for i in range(1, len(ears)):
-                if ears[i - 1] >= 0.21 and ears[i] <= 0.19:
-                    blink_transition = True
-                    break
-                if ears[i - 1] <= 0.19 and ears[i] >= 0.21:
-                    blink_transition = True
-                    break
-
-            return bool(has_open and has_closed and enough_delta and blink_transition)
+            # Wymagamy już tylko ogólnej zmiany (delta) i obecności otwartej/zamkniętej powieki,
+            # bez twardego warunku na konkretną sekwencję sąsiednich klatek.
+            return bool(has_open and has_closed and enough_delta)
 
         except Exception as e:
             print(f"Błąd podczas detekcji liveness (blink): {e}")

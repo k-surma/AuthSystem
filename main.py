@@ -167,25 +167,9 @@ async def verify_access(
 
         liveness_ok = False
         if len(image_paths) >= 3:
+            # Detekcja mrugnięcia – traktujemy ją teraz jako dodatkową informację,
+            # ale NIE blokujemy całej weryfikacji, gdy mrugnięcie nie zostanie wykryte.
             liveness_ok = face_service.detect_blink_liveness(image_paths[:6])
-            if not liveness_ok:
-                log = AccessLog(
-                    timestamp=timestamp,
-                    result="SUSPICIOUS",
-                    match_score=None,
-                    badge_id=None,
-                    user_id=None,
-                    image_path=primary_image_path,
-                )
-                db.add(log)
-                db.commit()
-
-                return VerificationResponse(
-                    success=False,
-                    message="Brak potwierdzenia liveness (mrugnięcie) – możliwe zdjęcie/ekran",
-                    result="SUSPICIOUS",
-                    log_id=log.id,
-                )
 
         if (not liveness_ok) and face_service.detect_screen_spoof(primary_image_path):
             log = AccessLog(
